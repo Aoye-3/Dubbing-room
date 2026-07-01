@@ -1,5 +1,7 @@
 import { RefreshCw, RotateCcw, XCircle } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { apiClient } from "../shared/api/client";
+import type { GenerationJob, GenerationTake } from "../shared/types";
 
 type Labels = {
   jobs: string;
@@ -17,14 +19,14 @@ export function JobListPage({ labels }: { labels: Labels }) {
   const load = useCallback(async () => {
     try {
       setError("");
-      const result = await window.voxcpmShell?.listGenerationJobs();
+      const result = await apiClient.listGenerationJobs();
       const items = result?.items ?? [];
       setJobs(items);
       const takeEntries = await Promise.all(
         items
           .filter((job) => job.backend_id === "indextts2")
           .map(async (job) => {
-            const takes = await window.voxcpmShell?.listGenerationTakes({ job_id: job.id });
+            const takes = await apiClient.listGenerationTakes({ job_id: job.id });
             return [job.id, takes?.items ?? []] as const;
           }),
       );
@@ -41,12 +43,12 @@ export function JobListPage({ labels }: { labels: Labels }) {
   }, [load]);
 
   const cancel = async (id: string) => {
-    await window.voxcpmShell?.cancelGenerationJob({ id });
+    await apiClient.cancelGenerationJob({ id });
     await load();
   };
 
   const retry = async (id: string) => {
-    await window.voxcpmShell?.retryGenerationJob({ id });
+    await apiClient.retryGenerationJob({ id });
     await load();
   };
 

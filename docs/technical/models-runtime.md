@@ -60,8 +60,8 @@ src/voxcpm_app/runtime.py
 
 当前限制：
 
-- 没有 queue。
-- 没有 cancel。
+- queue 是进程内 FIFO，不会在后端重启后恢复旧的 queued/running job。
+- queued job 可以 cancel；running job 目前只记录 cancel requested，不会强制中断。
 - 没有 load/unload。
 - 没有 CUDA cache cleanup。
 - 没有跨进程锁。
