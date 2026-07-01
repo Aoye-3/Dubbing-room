@@ -1,0 +1,39 @@
+# Development Tools.
+.mypy_cache/
+.ruff_cache/
+__pycache__/
+.idea/
+.vscode/
+
+# Environments.
+.venv*/
+venv*/
+conda_env*/
+
+# Python Bytecode.
+*.py[cod]
+
+# Distribution/Packaging.
+/build/
+/dist/
+*.egg-info/
+.pypirc
+
+# Operating System Junk.
+*.DS_Store
+Thumbs.db
+desktop.ini
+
+# IndexTTS.
+/cache/
+/checkpoints/*
+!/checkpoints/*.yaml
+!/checkpoints/pinyin.vocab
+/outputs/
+
+# Example audio files (downloaded on demand, not stored in git)
+/examples/*.wav
+/tests/sample_prompt.wav
+
+.claude
+.memsearch
