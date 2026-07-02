@@ -100,6 +100,7 @@ def initialize_database(paths: AppPaths) -> sqlite3.Connection:
             status text not null,
             params_json text not null default '{}',
             output_asset_id text,
+            legacy_generation_id text,
             is_selected integer not null default 0,
             error_summary text not null default '',
             created_at text not null,
@@ -125,6 +126,17 @@ def initialize_database(paths: AppPaths) -> sqlite3.Connection:
         "insert or ignore into schema_version(version, applied_at) values (?, ?)",
         (2, utc_now()),
     )
+    _add_column_if_missing(conn, "generation_takes", "legacy_generation_id", "text")
+    conn.execute(
+        "insert or ignore into schema_version(version, applied_at) values (?, ?)",
+        (3, utc_now()),
+    )
     conn.commit()
     return conn
+
+
+def _add_column_if_missing(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
+    columns = {row["name"] for row in conn.execute(f"pragma table_info({table})")}
+    if column not in columns:
+        conn.execute(f"alter table {table} add column {column} {definition}")
 

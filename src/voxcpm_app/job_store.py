@@ -9,6 +9,7 @@ import soundfile as sf
 
 from .audio_assets import sha256_file
 from .db import initialize_database, utc_now
+from .generation_history import create_generation, mark_generation_succeeded
 from .paths import AppPaths
 from .repositories import AssetRepository, GenerationJobRepository, GenerationTakeRepository
 from .schemas import ASSET_KINDS, JOB_STATUSES, AssetRecord, GenerationJobRecord, GenerationTakeRecord
@@ -127,6 +128,14 @@ def get_generation_job(paths: AppPaths, job_id: str) -> GenerationJobRecord | No
         conn.close()
 
 
+def get_generation_take(paths: AppPaths, take_id: str) -> GenerationTakeRecord | None:
+    conn = initialize_database(paths)
+    try:
+        return GenerationTakeRepository(conn).get(take_id)
+    finally:
+        conn.close()
+
+
 def update_generation_job(paths: AppPaths, job_id: str, **fields: object) -> GenerationJobRecord:
     if "status" in fields and fields["status"] not in JOB_STATUSES:
         raise ValueError(f"unsupported job status: {fields['status']}")
@@ -160,6 +169,7 @@ def create_generation_take(
         status=status,
         params_json=json.dumps(params or {}, ensure_ascii=False),
         output_asset_id=output_asset_id,
+        legacy_generation_id=None,
         is_selected=False,
         error_summary="",
         created_at=now,
@@ -196,3 +206,80 @@ def select_generation_take(paths: AppPaths, take_id: str) -> GenerationTakeRecor
         return GenerationTakeRepository(conn).select(take_id)
     finally:
         conn.close()
+
+
+def generation_take_to_dict(paths: AppPaths, take: GenerationTakeRecord) -> dict[str, object]:
+    payload = take.to_dict()
+    payload["params"] = json.loads(take.params_json or "{}")
+    payload["output_asset"] = None
+    if take.output_asset_id:
+        asset = get_asset(paths, take.output_asset_id)
+        payload["output_asset"] = asset.to_dict() if asset else None
+    return payload
+
+
+def select_take_and_project(paths: AppPaths, take_id: str) -> GenerationTakeRecord:
+    take = get_generation_take(paths, take_id)
+    if take is None:
+        raise KeyError(f"generation take not found: {take_id}")
+    if take.status != "succeeded":
+        raise ValueError("only succeeded takes can be selected")
+    if not take.output_asset_id:
+        raise ValueError("selected take has no output asset")
+    asset = get_asset(paths, take.output_asset_id)
+    if asset is None:
+        raise KeyError(f"asset not found: {take.output_asset_id}")
+    job = get_generation_job(paths, take.job_id)
+    if job is None:
+        raise KeyError(f"generation job not found: {take.job_id}")
+
+    legacy_generation_id = job.legacy_generation_id or take.legacy_generation_id
+    if not legacy_generation_id:
+        legacy_generation_id = _create_selected_take_generation(paths, job, take).id
+
+    sample_rate = int(asset.sample_rate or 0)
+    mark_generation_succeeded(
+        paths,
+        legacy_generation_id,
+        source_output_audio_path=paths.project_root / asset.path,
+        sample_rate=sample_rate,
+    )
+    select_generation_take(paths, take_id)
+    selected = update_generation_take(paths, take_id, legacy_generation_id=legacy_generation_id)
+    update_generation_job(
+        paths,
+        job.id,
+        status="succeeded",
+        output_asset_id=asset.id,
+        legacy_generation_id=legacy_generation_id,
+        error_summary="",
+    )
+    return selected
+
+
+def _create_selected_take_generation(
+    paths: AppPaths,
+    job: GenerationJobRecord,
+    take: GenerationTakeRecord,
+):
+    params = json.loads(take.params_json or job.params_json or "{}")
+    return create_generation(
+        paths,
+        input_text=job.input_text,
+        control_instruction=json.dumps(
+            {
+                "engine": job.backend_id,
+                "selected_take_id": take.id,
+                "take_index": take.take_index,
+                "params": params,
+            },
+            ensure_ascii=False,
+        ),
+        voice_id=job.voice_id,
+        reference_audio_path=None,
+        prompt_text=str(params.get("emo_text") or ""),
+        cfg_value=float(params.get("emo_alpha", 1.0)),
+        inference_timesteps=int(params.get("max_text_tokens_per_segment", 120)),
+        normalize=False,
+        denoise=False,
+    )

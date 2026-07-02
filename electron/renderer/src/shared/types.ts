@@ -140,7 +140,16 @@ export type GenerationTake = {
   label: string;
   status: string;
   params_json: string;
+  params?: Record<string, unknown>;
   output_asset_id: string | null;
+  output_asset: {
+    id: string;
+    path: string;
+    mime_type: string;
+    duration_seconds: number | null;
+    sample_rate: number | null;
+  } | null;
+  legacy_generation_id: string | null;
   is_selected: boolean;
   error_summary: string;
   created_at: string;
@@ -183,4 +192,5 @@ export type IndexTTS2Payload = {
   use_deepspeed: boolean;
   use_accel: boolean;
   use_torch_compile: boolean;
+  take_count?: number;
 };

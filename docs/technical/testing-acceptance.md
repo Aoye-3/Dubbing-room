@@ -136,3 +136,4 @@ Python 检查：
 - 不提交权重、cache、venv。
 - 汇报哪些测试已跑，哪些未跑。
 
+- Phase 3 verification status (2026-07-02): add tests for schema v3 migration, selected take projection idempotency, failed take selection rejection, IndexTTS2 multi-take queue aggregation, take asset playback payloads, and save-as-voice from selected take assets. Required automated checks remain the targeted Python suite with `--basetemp data\pytest-tmp`, `npm.cmd run typecheck`, `npm.cmd run build`, and Electron `node --check` syntax checks. Real smoke now includes preparing/downloading project-local IndexTTS2 runtime/checkpoints before running the model checks.

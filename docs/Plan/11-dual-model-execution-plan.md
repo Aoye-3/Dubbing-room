@@ -583,3 +583,4 @@ Avoid parallel edits to the same files. If backend and frontend both need `share
 - Cloud sync and user accounts.
 - Model training, LoRA management, or model-level voice tuning.
 - Duration control for IndexTTS2 until upstream exposes a stable release path for it.
+- Phase 3 execution update (2026-07-02): this branch implements the multi-take job loop on top of the existing storage v2/job API baseline. IndexTTS2 queued jobs default to 3 takes, selected succeeded takes project into legacy History through `generation_takes.legacy_generation_id`, and Jobs UI can play/select/save take outputs. Runtime/checkpoint download and real smoke verification still require project-local assets.

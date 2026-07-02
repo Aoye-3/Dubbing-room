@@ -14,7 +14,7 @@ from .job_store import (
     create_generation_take,
     get_generation_job,
     list_generation_takes,
-    select_generation_take,
+    select_take_and_project,
     update_generation_job,
     update_generation_take,
 )
@@ -35,7 +35,9 @@ class GenerationJobQueue:
         backend_id = str(payload.get("backend_id") or "")
         if backend_id not in {"voxcpm2", "indextts2"}:
             raise ValueError(f"unsupported backend_id: {backend_id}")
-        params = payload.get("params") if isinstance(payload.get("params"), dict) else {}
+        params = dict(payload.get("params")) if isinstance(payload.get("params"), dict) else {}
+        if backend_id == "indextts2":
+            params["take_count"] = _take_count(params.get("take_count"))
         input_text = str(payload.get("input_text") or params.get("input_text") or params.get("text") or "").strip()
         job = create_generation_job(
             self.paths,
@@ -47,14 +49,15 @@ class GenerationJobQueue:
             params=params,
         )
         if backend_id == "indextts2":
-            create_generation_take(
-                self.paths,
-                job_id=job.id,
-                backend_id=backend_id,
-                take_index=1,
-                label="Take 1",
-                params=params,
-            )
+            for take_index in range(1, _take_count(params.get("take_count")) + 1):
+                create_generation_take(
+                    self.paths,
+                    job_id=job.id,
+                    backend_id=backend_id,
+                    take_index=take_index,
+                    label=f"Take {take_index}",
+                    params={**params, "take_index": take_index},
+                )
         self._queue.put(job.id)
         return job
 
@@ -99,8 +102,8 @@ class GenerationJobQueue:
                 record = self.generation_service.generate_audio(_voxcpm_payload(job, params))
                 asset_kind = "generation_output"
             elif job.backend_id == "indextts2":
-                record = self.indextts2_service.generate(_indextts2_payload(job, params))
-                asset_kind = "take_output"
+                self._execute_indextts2_job(job)
+                return
             else:
                 raise ValueError(f"unsupported backend_id: {job.backend_id}")
             if record.status != "succeeded":
@@ -137,12 +140,49 @@ class GenerationJobQueue:
             update_generation_job(self.paths, job.id, status="failed", error_summary=error_summary)
             self._mark_take_failed(job, error_summary)
 
-    def _mark_take_succeeded(self, job: GenerationJobRecord, output_asset_id: str | None) -> None:
+    def _execute_indextts2_job(self, job: GenerationJobRecord) -> None:
         takes = list_generation_takes(self.paths, job.id)
         if not takes:
+            update_generation_job(self.paths, job.id, status="failed", error_summary="job has no takes")
             return
-        take = update_generation_take(self.paths, takes[0].id, status="succeeded", output_asset_id=output_asset_id)
-        select_generation_take(self.paths, take.id)
+        for take in takes:
+            if take.status != "queued":
+                continue
+            params = json.loads(take.params_json or job.params_json or "{}")
+            update_generation_take(self.paths, take.id, status="running", error_summary="")
+            try:
+                output_path, sample_rate = self.indextts2_service.generate_take(
+                    _indextts2_payload(job, params),
+                    take_id=take.id,
+                )
+                asset = create_asset(self.paths, kind="take_output", path=output_path, sample_rate=sample_rate)
+                update_generation_take(
+                    self.paths,
+                    take.id,
+                    status="succeeded",
+                    output_asset_id=asset.id,
+                    error_summary="",
+                )
+            except Exception as exc:
+                update_generation_take(
+                    self.paths,
+                    take.id,
+                    status="failed",
+                    error_summary=str(exc).splitlines()[0][:500],
+                )
+        completed = list_generation_takes(self.paths, job.id)
+        succeeded = [take for take in completed if take.status == "succeeded"]
+        if not succeeded:
+            errors = [take.error_summary for take in completed if take.error_summary]
+            update_generation_job(
+                self.paths,
+                job.id,
+                status="failed",
+                error_summary=errors[0] if errors else "all takes failed",
+            )
+            return
+        selected = next((take for take in succeeded if take.is_selected), succeeded[0])
+        select_take_and_project(self.paths, selected.id)
 
     def _mark_take_failed(self, job: GenerationJobRecord, error_summary: str) -> None:
         takes = list_generation_takes(self.paths, job.id)
@@ -163,6 +203,14 @@ def _default_model_id(backend_id: str) -> str:
 
 def _default_mode(backend_id: str) -> str:
     return "voice_generation" if backend_id == "voxcpm2" else "line_performance"
+
+
+def _take_count(value: object) -> int:
+    try:
+        count = int(value)
+    except (TypeError, ValueError):
+        count = 3
+    return max(1, min(5, count))
 
 
 def _voxcpm_payload(job: GenerationJobRecord, params: dict[str, Any]) -> dict[str, Any]:

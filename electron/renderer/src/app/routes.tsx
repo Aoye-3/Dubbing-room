@@ -64,7 +64,7 @@ export function AppRoutes({
     return <HistoryPage generations={generations} appDataState={appDataState} appDataError={appDataError} reload={reload} t={t} />;
   }
   if (activePage === "jobs") {
-    return <JobListPage labels={{ jobs: t("navJobs"), retry: t("retry"), cancel: t("cancel"), noJobs: t("noJobs"), takes: t("takes") }} />;
+    return <JobListPage labels={{ jobs: t("navJobs"), retry: t("retry"), cancel: t("cancel"), noJobs: t("noJobs"), takes: t("takes"), selectTake: t("selectTake"), selected: t("selected"), saveVoice: t("saveVoice") }} />;
   }
   return <SettingsPage status={status} shellState={shellState} language={language} setLanguage={setLanguage} t={t} />;
 }

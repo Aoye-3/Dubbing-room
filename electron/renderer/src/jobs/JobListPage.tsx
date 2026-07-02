@@ -1,6 +1,7 @@
-import { RefreshCw, RotateCcw, XCircle } from "lucide-react";
+import { CheckCircle2, RefreshCw, RotateCcw, Save, XCircle } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { apiClient } from "../shared/api/client";
+import { mediaUrl } from "../shared/audio";
 import type { GenerationJob, GenerationTake } from "../shared/types";
 
 type Labels = {
@@ -9,6 +10,9 @@ type Labels = {
   cancel: string;
   noJobs: string;
   takes: string;
+  selectTake: string;
+  selected: string;
+  saveVoice: string;
 };
 
 export function JobListPage({ labels }: { labels: Labels }) {
@@ -52,6 +56,26 @@ export function JobListPage({ labels }: { labels: Labels }) {
     await load();
   };
 
+  const selectTake = async (id: string) => {
+    await apiClient.selectGenerationTake({ id });
+    await load();
+  };
+
+  const saveTakeAsVoice = async (take: GenerationTake) => {
+    if (!take.output_asset?.path) {
+      return;
+    }
+    await apiClient.createVoice({
+      source_audio_path: take.output_asset.path,
+      display_name: take.label || `Take ${take.take_index}`,
+      tags: ["take", take.backend_id],
+      notes: `Saved from generation job ${take.job_id}`,
+      source: "take",
+      duration_seconds: take.output_asset.duration_seconds,
+    });
+    await load();
+  };
+
   return (
     <section className="history-list">
       <div className="section-actions">
@@ -63,7 +87,7 @@ export function JobListPage({ labels }: { labels: Labels }) {
       {error && <p className="status-line error">{error}</p>}
       {jobs.length === 0 && <div className="empty-state"><h2>{labels.noJobs}</h2></div>}
       {jobs.map((job) => (
-        <article className="history-row" key={job.id}>
+        <article className="history-row job-row" key={job.id}>
           <div className="history-main">
             <h2>{job.status}</h2>
             <p>{job.backend_id}</p>
@@ -73,9 +97,7 @@ export function JobListPage({ labels }: { labels: Labels }) {
             <strong>{job.mode}</strong>
             <p>{job.input_text}</p>
             {job.error_summary && <p className="status-line error">{job.error_summary}</p>}
-            {takesByJob[job.id]?.length > 0 && (
-              <p>{`${labels.takes}: ${takesByJob[job.id].map((take) => `${take.label || take.take_index}:${take.status}${take.is_selected ? "*" : ""}`).join(", ")}`}</p>
-            )}
+            {takesByJob[job.id]?.length > 0 && <TakeList labels={labels} takes={takesByJob[job.id]} onSelect={selectTake} onSave={saveTakeAsVoice} />}
           </div>
           <div className="history-actions">
             {job.status === "queued" && (
@@ -92,5 +114,53 @@ export function JobListPage({ labels }: { labels: Labels }) {
         </article>
       ))}
     </section>
+  );
+}
+
+function TakeList({
+  labels,
+  takes,
+  onSelect,
+  onSave,
+}: {
+  labels: Labels;
+  takes: GenerationTake[];
+  onSelect: (id: string) => Promise<void>;
+  onSave: (take: GenerationTake) => Promise<void>;
+}) {
+  return (
+    <div className="take-list">
+      <strong>{labels.takes}</strong>
+      {takes.map((take) => (
+        <div className="take-row" key={take.id}>
+          <div>
+            <span>{take.label || `Take ${take.take_index}`}</span>
+            <small>{take.status}</small>
+          </div>
+          {take.output_asset?.path ? <audio controls src={mediaUrl(take.output_asset.path)} /> : <p>{take.error_summary || "--"}</p>}
+          <div className="take-actions">
+            <button
+              aria-label={labels.selectTake}
+              disabled={take.status !== "succeeded" || take.is_selected}
+              title={labels.selectTake}
+              type="button"
+              onClick={() => onSelect(take.id)}
+            >
+              <CheckCircle2 size={17} />
+            </button>
+            <button
+              aria-label={labels.saveVoice}
+              disabled={take.status !== "succeeded" || !take.output_asset?.path}
+              title={labels.saveVoice}
+              type="button"
+              onClick={() => onSave(take)}
+            >
+              <Save size={17} />
+            </button>
+          </div>
+          {take.is_selected && <span className="take-selected">{labels.selected}</span>}
+        </div>
+      ))}
+    </div>
   );
 }

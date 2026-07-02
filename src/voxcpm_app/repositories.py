@@ -90,6 +90,7 @@ def _take_from_row(row: sqlite3.Row) -> GenerationTakeRecord:
         status=row["status"],
         params_json=row["params_json"],
         output_asset_id=row["output_asset_id"],
+        legacy_generation_id=row["legacy_generation_id"],
         is_selected=bool(row["is_selected"]),
         error_summary=row["error_summary"],
         created_at=row["created_at"],
@@ -303,8 +304,8 @@ class GenerationTakeRepository:
             """
             insert into generation_takes (
                 id, job_id, backend_id, take_index, label, status, params_json,
-                output_asset_id, is_selected, error_summary, created_at, updated_at
-            ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                output_asset_id, legacy_generation_id, is_selected, error_summary, created_at, updated_at
+            ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 record.id,
@@ -315,6 +316,7 @@ class GenerationTakeRepository:
                 record.status,
                 record.params_json,
                 record.output_asset_id,
+                record.legacy_generation_id,
                 int(record.is_selected),
                 record.error_summary,
                 record.created_at,
@@ -344,7 +346,7 @@ class GenerationTakeRepository:
             """
             update generation_takes
             set label = ?, status = ?, output_asset_id = ?, is_selected = ?,
-                error_summary = ?, updated_at = ?
+                error_summary = ?, legacy_generation_id = ?, updated_at = ?
             where id = ?
             """,
             (
@@ -353,6 +355,7 @@ class GenerationTakeRepository:
                 updated.output_asset_id,
                 int(updated.is_selected),
                 updated.error_summary,
+                updated.legacy_generation_id,
                 updated.updated_at,
                 take_id,
             ),

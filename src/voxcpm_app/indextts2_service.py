@@ -265,6 +265,20 @@ class IndexTTS2Service:
         except Exception as exc:
             return mark_generation_failed(self.paths, generation.id, error_summary=_error_summary(exc))
 
+    def generate_take(self, payload: dict[str, Any], *, take_id: str) -> tuple[Path, int]:
+        text = str(payload.get("text") or payload.get("input_text") or "").strip()
+        if not text:
+            raise ValueError("text is required")
+        speaker = self._resolve_speaker(payload.get("speaker"))
+        request = self._build_worker_payload(payload, text=text, speaker_audio_path=speaker.absolute_path)
+        output_path = self.paths.tmp_dir / f"{take_id}-indextts2.wav"
+        active_job_id = str(payload.get("generation_job_id") or take_id)
+        with self.coordinator.lease("indextts2", job_id=active_job_id):
+            sample_rate = self.runner.synthesize(self.paths, request, output_path)
+        if speaker.voice_id:
+            mark_voice_used(self.paths, speaker.voice_id)
+        return output_path, sample_rate
+
     def _resolve_speaker(self, speaker: object) -> ResolvedAudio:
         if not isinstance(speaker, dict):
             raise ValueError("speaker reference is required")
@@ -393,6 +407,8 @@ def _runtime_cache_env(paths: AppPaths) -> dict[str, str]:
         "HF_XET_CACHE": str(runtime_root / "hf-home" / "xet"),
         "TORCH_EXTENSIONS_DIR": str(runtime_root / "torch-extensions"),
         "XDG_CACHE_HOME": str(runtime_root / "xdg-cache"),
+        "MPLCONFIGDIR": str(runtime_root / "matplotlib"),
+        "NUMBA_CACHE_DIR": str(runtime_root / "numba-cache"),
     }
 
 

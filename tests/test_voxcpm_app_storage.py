@@ -21,10 +21,12 @@ from voxcpm_app.job_store import (
     create_asset,
     create_generation_job,
     create_generation_take,
+    get_generation_job,
     list_assets,
     list_generation_jobs,
     list_generation_takes,
     select_generation_take,
+    select_take_and_project,
     update_generation_job,
     update_generation_take,
 )
@@ -48,7 +50,7 @@ def test_database_initialization_is_idempotent(tmp_path: Path):
             )
         }
 
-    assert versions == [(1,), (2,)]
+    assert versions == [(1,), (2,), (3,)]
     assert tables == {"voices", "generations", "assets", "generation_jobs", "generation_takes"}
     assert paths.voices_dir.exists()
     assert paths.generations_dir.exists()
@@ -106,9 +108,11 @@ def test_v1_database_is_additively_migrated_to_v2(tmp_path: Path):
         job_table = conn.execute(
             "select name from sqlite_master where type = 'table' and name = 'generation_jobs'"
         ).fetchone()
+        take_columns = {row[1] for row in conn.execute("pragma table_info(generation_takes)")}
 
-    assert versions == [(1,), (2,)]
+    assert versions == [(1,), (2,), (3,)]
     assert job_table == ("generation_jobs",)
+    assert "legacy_generation_id" in take_columns
 
 
 def test_voice_lifecycle_copies_audio_and_hides_soft_deleted_records(tmp_path: Path):
@@ -257,3 +261,68 @@ def test_asset_job_and_take_lifecycle(tmp_path: Path):
     assert [item.is_selected for item in takes] == [False, True]
     assert updated_job.status == "succeeded"
     assert failed_take.error_summary == "bad take"
+
+
+def test_select_take_projects_to_history_and_is_idempotent(tmp_path: Path):
+    paths = AppPaths.from_project_root(tmp_path)
+    output_audio = tmp_path / "take.wav"
+    output_audio.write_bytes(b"selected-take")
+    asset = create_asset(paths, kind="take_output", path=output_audio, sample_rate=24000)
+    job = create_generation_job(
+        paths,
+        backend_id="indextts2",
+        model_id="IndexTTS2",
+        mode="line_performance",
+        input_text="Line one",
+        params={"emotion_mode": "same_voice"},
+    )
+    take = create_generation_take(
+        paths,
+        job_id=job.id,
+        backend_id="indextts2",
+        take_index=1,
+        label="Take 1",
+        status="succeeded",
+        output_asset_id=asset.id,
+    )
+
+    selected = select_take_and_project(paths, take.id)
+    selected_again = select_take_and_project(paths, take.id)
+    projected = list_generations(paths)
+    updated_job = get_generation_job(paths, job.id)
+
+    assert selected.is_selected is True
+    assert selected_again.legacy_generation_id == selected.legacy_generation_id
+    assert len(projected) == 1
+    assert projected[0].output_audio_path == f"data/app/generations/{selected.legacy_generation_id}.wav"
+    assert (tmp_path / projected[0].output_audio_path).read_bytes() == b"selected-take"
+    assert updated_job is not None
+    assert updated_job.output_asset_id == asset.id
+    assert updated_job.legacy_generation_id == selected.legacy_generation_id
+
+
+def test_failed_take_cannot_be_selected(tmp_path: Path):
+    paths = AppPaths.from_project_root(tmp_path)
+    job = create_generation_job(
+        paths,
+        backend_id="indextts2",
+        model_id="IndexTTS2",
+        mode="line_performance",
+        input_text="Line one",
+        params={},
+    )
+    take = create_generation_take(
+        paths,
+        job_id=job.id,
+        backend_id="indextts2",
+        take_index=1,
+        label="Take 1",
+        status="failed",
+    )
+
+    try:
+        select_take_and_project(paths, take.id)
+    except ValueError as exc:
+        assert "only succeeded takes" in str(exc)
+    else:
+        raise AssertionError("expected failed take selection to raise")

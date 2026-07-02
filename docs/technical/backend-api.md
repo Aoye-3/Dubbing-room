@@ -182,3 +182,4 @@ sync route -> create job -> run immediately -> return legacy GenerationRecord
 - 后端所有错误返回 JSON。
 - Electron main 对超时和非 2xx 有清晰错误。
 
+- Phase 3 API status (2026-07-02): `generation-jobs` create/list/get/cancel/retry, `generation-jobs/:job_id/takes`, and `generation-takes/:take_id/select` are implemented. Take list responses include `output_asset` for playback. IndexTTS2 queued jobs support `params.take_count` clamped to 1-5 with default 3. Appending takes after job creation, hard cancellation, and real runtime load/free/unload remain deferred.

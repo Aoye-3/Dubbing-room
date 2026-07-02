@@ -920,6 +920,74 @@ h1 {
   margin: 0;
 }
 
+.job-row {
+  align-items: start;
+  min-height: 142px;
+}
+
+.job-row .history-text {
+  max-height: none;
+}
+
+.take-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.take-row {
+  display: grid;
+  grid-template-columns: minmax(90px, 120px) minmax(180px, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  background: #fffdfa;
+  border: 1px solid #e1ddd4;
+  border-radius: 6px;
+}
+
+.take-row span,
+.take-row small {
+  display: block;
+}
+
+.take-row small {
+  margin-top: 3px;
+  color: #77736a;
+}
+
+.take-row audio {
+  width: 100%;
+}
+
+.take-actions {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.take-actions button {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  color: #77736a;
+  background: transparent;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.take-actions button:hover {
+  color: #20211f;
+  background: #f0ede5;
+}
+
+.take-selected {
+  color: #195f52;
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .history-actions {
   align-items: center;
 }

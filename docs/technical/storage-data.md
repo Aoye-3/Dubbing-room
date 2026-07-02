@@ -199,3 +199,4 @@ user selects take:
 - 新 asset/job/take repository 可读写。
 - selected take 能投影到 legacy generation。
 
+- Phase 3 storage status (2026-07-02): storage v2 is active. `assets`, `generation_jobs`, and `generation_takes` are initialized additively. `generation_takes.legacy_generation_id` links the currently selected take to the legacy History projection. Failed takes stay in Jobs detail and are not projected to History. Selected take audio can be saved as a Voice Library entry by reusing the existing create-voice flow with `source: "take"`.

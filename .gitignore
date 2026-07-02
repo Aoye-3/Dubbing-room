@@ -18,6 +18,7 @@ data/pytest-tmp/
 app_local.py
 !third_party/index-tts/checkpoints/
 third_party/index-tts/checkpoints/*
+third_party/index-tts/checkpoints/config.yaml
 !third_party/index-tts/checkpoints/pinyin.vocab
 third_party/index-tts/**/*.bin
 third_party/index-tts/**/*.ckpt

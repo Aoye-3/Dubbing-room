@@ -18,7 +18,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from voxcpm_app.backend_server import build_handler
 from voxcpm_app.errors import AppBackendError
-from voxcpm_app.indextts2_service import IndexTTS2Service, SubprocessIndexTTS2Runner
+from voxcpm_app.indextts2_service import IndexTTS2Service, SubprocessIndexTTS2Runner, _runtime_cache_env
 from voxcpm_app.indextts2_worker import run as run_indextts2_worker
 from voxcpm_app.paths import AppPaths
 from voxcpm_app.runtime import RuntimeBackendStatus, RuntimeCoordinator
@@ -243,6 +243,15 @@ def test_subprocess_runner_status_lists_missing_checkpoint_files(tmp_path: Path)
     assert "bpe.model" in status.last_error
     assert "gpt.pth" in status.last_error
     assert "s2mel.pth" in status.last_error
+
+
+def test_indextts2_worker_cache_env_stays_project_local(tmp_path: Path):
+    paths = AppPaths.from_project_root(tmp_path)
+    env = _runtime_cache_env(paths)
+
+    for key in ["HF_HOME", "TORCH_EXTENSIONS_DIR", "XDG_CACHE_HOME", "MPLCONFIGDIR", "NUMBA_CACHE_DIR"]:
+        value = Path(env[key]).resolve()
+        assert value == tmp_path.resolve() or tmp_path.resolve() in value.parents
 
 
 def test_subprocess_runner_status_reports_missing_config(tmp_path: Path):

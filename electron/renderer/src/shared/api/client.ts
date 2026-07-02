@@ -58,6 +58,10 @@ export const apiClient = {
     return shell()?.listGenerationJobs() ?? Promise.resolve(emptyList<GenerationJob>());
   },
 
+  getGenerationJob(payload: { id: string }): Promise<GenerationJob | undefined> {
+    return shell()?.getGenerationJob(payload) ?? Promise.resolve(undefined);
+  },
+
   cancelGenerationJob(payload: { id: string }): Promise<GenerationJob | undefined> {
     return shell()?.cancelGenerationJob(payload) ?? Promise.resolve(undefined);
   },
@@ -68,6 +72,10 @@ export const apiClient = {
 
   listGenerationTakes(payload: { job_id: string }): Promise<AppListResponse<GenerationTake>> {
     return shell()?.listGenerationTakes(payload) ?? Promise.resolve(emptyList<GenerationTake>());
+  },
+
+  selectGenerationTake(payload: { id: string }): Promise<GenerationTake | undefined> {
+    return shell()?.selectGenerationTake(payload) ?? Promise.resolve(undefined);
   },
 
   mediaUrl(projectRelativePath: string): string {

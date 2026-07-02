@@ -14,10 +14,17 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from voxcpm_app.backend_server import build_handler
+from voxcpm_app.generation_history import list_generations
 from voxcpm_app.generation_service import GenerationService
 from voxcpm_app.generation_service import VoxCPMSynthesizer
 from voxcpm_app.job_queue import GenerationJobQueue
-from voxcpm_app.job_store import create_generation_job
+from voxcpm_app.job_store import (
+    create_asset,
+    create_generation_job,
+    create_generation_take,
+    get_generation_job,
+    list_generation_takes,
+)
 from voxcpm_app.paths import AppPaths
 from voxcpm_app.runtime import RuntimeCoordinator
 from voxcpm_app.voice_library import create_voice, list_voices
@@ -33,6 +40,23 @@ class FakeSynthesizer:
         if self.error is not None:
             raise self.error
         return 48000, np.zeros(2400, dtype=np.float32)
+
+
+class FakeIndexTTS2Service:
+    def __init__(self, paths: AppPaths, *, fail_take_indexes: set[int] | None = None):
+        self.paths = paths
+        self.fail_take_indexes = fail_take_indexes or set()
+        self.calls: list[dict] = []
+
+    def generate_take(self, payload: dict, *, take_id: str):
+        self.calls.append({"payload": payload, "take_id": take_id})
+        take_index = int(payload.get("take_index", len(self.calls)))
+        if take_index in self.fail_take_indexes:
+            raise RuntimeError(f"take {take_index} failed")
+        output_path = self.paths.tmp_dir / f"{take_id}.wav"
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_bytes(f"take-{take_index}".encode("utf-8"))
+        return output_path, 24000
 
 
 def generation_payload(**overrides):
@@ -290,6 +314,45 @@ def test_backend_generation_job_api_runs_voxcpm2_job(tmp_path: Path):
         server.server_close()
 
 
+def test_backend_generation_take_api_returns_asset_and_selects_take(tmp_path: Path):
+    paths = AppPaths.from_project_root(tmp_path)
+    output_audio = tmp_path / "take.wav"
+    output_audio.write_bytes(b"take-audio")
+    asset = create_asset(paths, kind="take_output", path=output_audio, sample_rate=24000)
+    job = create_generation_job(
+        paths,
+        backend_id="indextts2",
+        model_id="IndexTTS2",
+        mode="line_performance",
+        input_text="queued line",
+        params={"emotion_mode": "same_voice"},
+    )
+    take = create_generation_take(
+        paths,
+        job_id=job.id,
+        backend_id="indextts2",
+        take_index=1,
+        label="Take 1",
+        status="succeeded",
+        output_asset_id=asset.id,
+    )
+    service = GenerationService(paths, synthesizer=FakeSynthesizer())
+    server = _start_server(paths, service)
+    try:
+        listed = _request_json(server, "GET", f"/generation-jobs/{job.id}/takes")
+        selected = _request_json(server, "POST", f"/generation-takes/{take.id}/select", {})
+        updated_job = _request_json(server, "GET", f"/generation-jobs/{job.id}")
+
+        assert listed["items"][0]["output_asset"]["path"] == "take.wav"
+        assert selected["is_selected"] is True
+        assert selected["legacy_generation_id"]
+        assert updated_job["output_asset_id"] == asset.id
+        assert updated_job["legacy_generation_id"] == selected["legacy_generation_id"]
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
 def test_generation_job_queue_can_cancel_queued_job(tmp_path: Path):
     paths = AppPaths.from_project_root(tmp_path)
     service = GenerationService(paths, synthesizer=FakeSynthesizer())
@@ -306,6 +369,44 @@ def test_generation_job_queue_can_cancel_queued_job(tmp_path: Path):
     cancelled = queue.cancel(job.id)
 
     assert cancelled.status == "cancelled"
+
+
+def test_generation_job_queue_runs_multiple_indextts2_takes_and_projects_first_success(tmp_path: Path):
+    paths = AppPaths.from_project_root(tmp_path)
+    service = GenerationService(paths, synthesizer=FakeSynthesizer())
+    index_service = FakeIndexTTS2Service(paths, fail_take_indexes={2})
+    queue = GenerationJobQueue(paths, service, index_service)  # type: ignore[arg-type]
+
+    job = queue.submit(
+        {
+            "backend_id": "indextts2",
+            "model_id": "IndexTTS2",
+            "mode": "line_performance",
+            "input_text": "queued line",
+            "params": {
+                "text": "queued line",
+                "speaker": {"kind": "upload", "path": str(_write_audio(tmp_path, "speaker.wav"))},
+                "emotion_mode": "same_voice",
+                "emo_alpha": 1,
+                "take_count": 3,
+            },
+        }
+    )
+
+    completed = _wait_for_queue_job(paths, job.id, "succeeded")
+    takes = list_generation_takes(paths, job.id)
+    history = list_generations(paths)
+
+    assert completed.status == "succeeded"
+    assert len(takes) == 3
+    assert [take.status for take in takes] == ["succeeded", "failed", "succeeded"]
+    assert [take.is_selected for take in takes] == [True, False, False]
+    assert takes[0].legacy_generation_id == completed.legacy_generation_id
+    assert completed.output_asset_id == takes[0].output_asset_id
+    assert len(history) == 1
+    assert history[0].id == completed.legacy_generation_id
+    assert history[0].output_audio_path is not None
+    assert (tmp_path / history[0].output_audio_path).read_bytes() == b"take-1"
 
 
 def _start_server(paths: AppPaths, service: GenerationService):
@@ -333,3 +434,18 @@ def _wait_for_job(server, job_id: str, status: str):
             return job
         time.sleep(0.1)
     raise AssertionError(f"job {job_id} did not reach {status}")
+
+
+def _wait_for_queue_job(paths: AppPaths, job_id: str, status: str):
+    for _ in range(50):
+        job = get_generation_job(paths, job_id)
+        if job is not None and job.status == status:
+            return job
+        time.sleep(0.1)
+    raise AssertionError(f"job {job_id} did not reach {status}")
+
+
+def _write_audio(tmp_path: Path, name: str) -> Path:
+    path = tmp_path / name
+    path.write_bytes(b"audio")
+    return path

@@ -30,6 +30,7 @@ export function IndexTTS2Page({
   const [emoText, setEmoText] = useState("");
   const [emoAlpha, setEmoAlpha] = useState(1);
   const [useRandom, setUseRandom] = useState(false);
+  const [takeCount, setTakeCount] = useState(3);
   const [intervalSilence, setIntervalSilence] = useState(200);
   const [maxTextTokens, setMaxTextTokens] = useState(120);
   const [emotionVector, setEmotionVector] = useState<Record<(typeof emotionVectorFields)[number], number>>({
@@ -217,6 +218,7 @@ export function IndexTTS2Page({
       use_deepspeed: useDeepspeed,
       use_accel: useAccel,
       use_torch_compile: useTorchCompile,
+      take_count: clampTakeCount(takeCount),
     };
     if (emotionMode === "audio_prompt" && emotionFile) {
       payload.emotion_audio = { kind: "upload", path: emotionFile.path };
@@ -368,6 +370,10 @@ export function IndexTTS2Page({
               </label>
               <p className="mode-description">{t("randomHint")}</p>
               <label>
+                <span>{t("takes")}</span>
+                <input min={1} max={5} step={1} type="number" value={takeCount} onChange={(event) => setTakeCount(clampTakeCount(Number(event.target.value)))} />
+              </label>
+              <label>
                 <span>{t("intervalSilence")}</span>
                 <input min={0} max={5000} step={50} type="number" value={intervalSilence} onChange={(event) => setIntervalSilence(Number(event.target.value))} />
               </label>
@@ -463,4 +469,11 @@ function buildIndexSpeakerPayload(
     return { kind: "saved_voice", voice_id: selectedVoiceId };
   }
   return null;
+}
+
+function clampTakeCount(value: number): number {
+  if (!Number.isFinite(value)) {
+    return 3;
+  }
+  return Math.max(1, Math.min(5, Math.round(value)));
 }

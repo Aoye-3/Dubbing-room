@@ -99,6 +99,7 @@ class GenerationTakeRecord:
     status: str
     params_json: str
     output_asset_id: str | None
+    legacy_generation_id: str | None
     is_selected: bool
     error_summary: str
     created_at: str

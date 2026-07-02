@@ -160,3 +160,4 @@ Next roadmap focus:
 - Phase 3 job/take product loop.
 - Renderer and Electron IPC tests for the new status/error surfaces.
 - Real-model smoke tests with project-local VoxCPM2 and IndexTTS2 assets.
+- Phase 3 job/take update (2026-07-02): storage v2 and the basic job API are implemented. The current Phase 3 branch adds IndexTTS2 multi-take queued execution, selected-take History projection, take playback payloads, and save-as-voice from selected take assets. Real model smoke remains dependent on project-local runtime/checkpoints.

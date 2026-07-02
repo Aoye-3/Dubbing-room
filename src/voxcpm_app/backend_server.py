@@ -14,7 +14,13 @@ from .errors import AppBackendError
 from .generation_service import GenerationService
 from .indextts2_service import IndexTTS2Service
 from .job_queue import GenerationJobQueue, job_to_dict
-from .job_store import get_generation_job, list_generation_jobs, list_generation_takes, select_generation_take
+from .job_store import (
+    generation_take_to_dict,
+    get_generation_job,
+    list_generation_jobs,
+    list_generation_takes,
+    select_take_and_project,
+)
 from .paths import AppPaths, default_project_root
 from .service_cli import ACTIONS
 
@@ -126,7 +132,7 @@ def build_handler(
             if len(parts) == 3 and parts[2] == "takes":
                 self._write_json(
                     HTTPStatus.OK,
-                    {"items": [take.to_dict() for take in list_generation_takes(paths, parts[1])]},
+                    {"items": [generation_take_to_dict(paths, take) for take in list_generation_takes(paths, parts[1])]},
                 )
                 return
             self._write_error(HTTPStatus.NOT_FOUND, "not found", "not_found")
@@ -144,7 +150,7 @@ def build_handler(
         def _handle_generation_take_post(self, path: str) -> None:
             parts = _path_parts(path)
             if len(parts) == 3 and parts[2] == "select":
-                self._write_json(HTTPStatus.OK, select_generation_take(paths, parts[1]).to_dict())
+                self._write_json(HTTPStatus.OK, generation_take_to_dict(paths, select_take_and_project(paths, parts[1])))
                 return
             self._write_error(HTTPStatus.NOT_FOUND, "not found", "not_found")
 

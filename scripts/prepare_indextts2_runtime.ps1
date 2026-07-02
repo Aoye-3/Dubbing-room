@@ -17,6 +17,8 @@ $paths = @{
     HF_XET_CACHE = Join-Path $runtimeRoot "hf-home\xet"
     TORCH_EXTENSIONS_DIR = Join-Path $runtimeRoot "torch-extensions"
     XDG_CACHE_HOME = Join-Path $runtimeRoot "xdg-cache"
+    MPLCONFIGDIR = Join-Path $runtimeRoot "matplotlib"
+    NUMBA_CACHE_DIR = Join-Path $runtimeRoot "numba-cache"
 }
 
 New-Item -ItemType Directory -Force -Path $runtimeRoot | Out-Null

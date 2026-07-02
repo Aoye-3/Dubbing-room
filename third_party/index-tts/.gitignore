@@ -28,6 +28,7 @@ desktop.ini
 /cache/
 /checkpoints/*
 !/checkpoints/*.yaml
+/checkpoints/config.yaml
 !/checkpoints/pinyin.vocab
 /outputs/
 
