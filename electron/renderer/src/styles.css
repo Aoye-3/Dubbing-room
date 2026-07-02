@@ -410,6 +410,35 @@ h1 {
   border-color: #efc5be;
 }
 
+.runtime-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.runtime-card dl {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+
+.runtime-card dl div {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.runtime-card dt {
+  color: #77736a;
+  font-weight: 700;
+}
+
+.runtime-card dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
 .emotion-vector-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

@@ -12,6 +12,7 @@ import soundfile as sf
 
 from .audio_assets import copy_tmp_audio
 from .db import initialize_database
+from .errors import AppBackendError
 from .generation_history import (
     create_generation,
     mark_generation_failed,
@@ -26,7 +27,21 @@ from .voice_library import mark_voice_used
 
 
 EMOTION_VECTOR_FIELDS = ["happy", "angry", "sad", "afraid", "disgusted", "melancholic", "surprised", "calm"]
-REQUIRED_CHECKPOINT_FILES = ["config.yaml", "bpe.model", "gpt.pth", "s2mel.pth"]
+REQUIRED_CHECKPOINT_FILES = [
+    "config.yaml",
+    "bpe.model",
+    "gpt.pth",
+    "s2mel.pth",
+    "wav2vec2bert_stats.pt",
+    "feat1.pt",
+    "feat2.pt",
+    "qwen0.6bemo4-merge",
+    "hf_cache/semantic_codec_model.safetensors",
+    "hf_cache/campplus_cn_common.bin",
+    "hf_cache/bigvgan/config.json",
+    "hf_cache/bigvgan/bigvgan_generator.pt",
+    "hf_cache/w2v-bert-2.0",
+]
 
 
 @dataclass(frozen=True)
@@ -50,23 +65,63 @@ class SubprocessIndexTTS2Runner:
         runtime_python = _runtime_python(paths)
         model_dir = _model_dir(paths)
         missing: list[str] = []
+        details: dict[str, object] = {
+            "source_root": str(source_root),
+            "runtime_python": str(runtime_python),
+            "runtime_root": str(_runtime_root(paths)),
+            "model_dir": str(model_dir),
+            "cfg_path": str(_cfg_path(paths)),
+            "missing_source": [],
+            "missing_runtime": [],
+            "missing_config": [],
+            "missing_checkpoints": [],
+            "outside_project_paths": [],
+        }
+        outside_project_paths = [
+            str(path)
+            for path in [runtime_python, model_dir, _cfg_path(paths)]
+            if not _is_project_local(paths, path)
+        ]
+        if outside_project_paths:
+            details["outside_project_paths"] = outside_project_paths
+            missing.extend(f"path outside project: {path}" for path in outside_project_paths)
         if not source_root.exists():
             missing.append("third_party/index-tts")
+            details["missing_source"] = [str(source_root)]
         if not runtime_python.exists():
             missing.append(str(runtime_python))
+            details["missing_runtime"] = [str(runtime_python)]
+        cfg_path = _cfg_path(paths)
+        if not cfg_path.exists():
+            missing.append(str(cfg_path))
+            details["missing_config"] = [str(cfg_path)]
         if not model_dir.exists():
             missing.append(str(model_dir))
+            details["missing_checkpoints"] = [str(model_dir)]
         else:
-            missing.extend(str(model_dir / name) for name in REQUIRED_CHECKPOINT_FILES if not (model_dir / name).exists())
+            missing_checkpoints = [
+                str(model_dir / name)
+                for name in REQUIRED_CHECKPOINT_FILES
+                if name != "config.yaml" and not (model_dir / name).exists()
+            ]
+            missing.extend(missing_checkpoints)
+            details["missing_checkpoints"] = missing_checkpoints
         last_error = coordinator.last_error("indextts2") or "; ".join(missing)
         state = coordinator.status("indextts2")
+        status_state = "busy" if state["runtime_busy"] else "configured"
+        if missing:
+            status_state = "missing_runtime" if details["missing_runtime"] or details["outside_project_paths"] else "missing_checkpoints"
+        if details["missing_source"]:
+            status_state = "missing_runtime"
+        details["runtime_busy"] = bool(state["runtime_busy"])
+        details["active_backend"] = state["active_backend"]
         return RuntimeBackendStatus(
             backend_id="indextts2",
             display_name="IndexTTS2",
             enabled=True,
             configured=not missing,
             loaded=False,
-            busy=bool(state["busy"]),
+            busy=bool(state["runtime_busy"]),
             device=os.environ.get("INDEXTTS2_DEVICE", os.environ.get("VOXCPM_APP_DEVICE", "cuda")),
             last_error=last_error,
             capabilities=[
@@ -79,6 +134,8 @@ class SubprocessIndexTTS2Runner:
             ],
             active_job_id=state["active_job_id"] if isinstance(state["active_job_id"], str) else None,
             started_at=state["started_at"] if isinstance(state["started_at"], str) else None,
+            state=status_state,
+            details=details,
         )
 
     def synthesize(self, paths: AppPaths, payload: dict[str, Any], output_path: Path) -> int:
@@ -86,6 +143,13 @@ class SubprocessIndexTTS2Runner:
         runtime_python = _runtime_python(paths)
         model_dir = _model_dir(paths)
         cfg_path = _cfg_path(paths)
+        outside_project_paths = [
+            str(path)
+            for path in [runtime_python, model_dir, cfg_path]
+            if not _is_project_local(paths, path)
+        ]
+        if outside_project_paths:
+            raise RuntimeError(f"IndexTTS2 runtime paths must stay inside project: {', '.join(outside_project_paths)}")
         if not source_root.exists():
             raise RuntimeError("IndexTTS2 source snapshot is missing: third_party/index-tts")
         if not runtime_python.exists():
@@ -111,23 +175,33 @@ class SubprocessIndexTTS2Runner:
             **_runtime_cache_env(paths),
             "PYTHONPATH": os.pathsep.join(python_path_parts),
         }
-        completed = subprocess.run(
-            [str(runtime_python), "-m", "voxcpm_app.indextts2_worker"],
-            input=json.dumps(worker_payload, ensure_ascii=False),
-            capture_output=True,
-            text=True,
-            cwd=str(paths.project_root),
-            env=env,
-            check=False,
-        )
+        try:
+            completed = subprocess.run(
+                [str(runtime_python), "-m", "voxcpm_app.indextts2_worker"],
+                input=json.dumps(worker_payload, ensure_ascii=False),
+                capture_output=True,
+                text=True,
+                cwd=str(paths.project_root),
+                env=env,
+                check=False,
+                timeout=_worker_timeout_seconds(),
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise AppBackendError(f"IndexTTS2 worker timed out after {exc.timeout}s", code="timeout") from exc
         stdout_lines = [line.strip() for line in completed.stdout.splitlines() if line.strip()]
         raw = stdout_lines[-1] if stdout_lines else "{}"
         try:
             result = json.loads(raw or "{}")
         except json.JSONDecodeError as exc:
-            raise RuntimeError(f"invalid IndexTTS2 worker JSON: {exc}") from exc
+            raise AppBackendError(f"invalid IndexTTS2 worker JSON: {exc}", code="worker_failed") from exc
         if completed.returncode != 0 or not result.get("ok"):
-            raise RuntimeError(str(result.get("error") or completed.stderr or "IndexTTS2 worker failed"))
+            raise AppBackendError(
+                str(result.get("error") or completed.stderr or "IndexTTS2 worker failed"),
+                code=str(result.get("code") or "worker_failed"),
+                details=result.get("details") if isinstance(result.get("details"), dict) else {},
+            )
+        if not output_path.exists() or not output_path.is_file():
+            raise AppBackendError(f"IndexTTS2 generated output is missing: {output_path}", code="output_missing")
         info = sf.info(str(output_path))
         return int(info.samplerate)
 
@@ -176,7 +250,8 @@ class IndexTTS2Service:
         output_path = self.paths.tmp_dir / f"{generation.id}-indextts2.wav"
 
         try:
-            with self.coordinator.lease("indextts2"):
+            active_job_id = str(payload.get("generation_job_id") or generation.id)
+            with self.coordinator.lease("indextts2", job_id=active_job_id):
                 sample_rate = self.runner.synthesize(self.paths, request, output_path)
             succeeded = mark_generation_succeeded(
                 self.paths,
@@ -248,8 +323,6 @@ class IndexTTS2Service:
         elif emotion_mode == "text_prompt":
             use_emo_text = True
             emo_text = str(payload.get("emo_text") or "").strip() or None
-            if emo_text is None:
-                raise ValueError("emo_text is required for text emotion mode")
         else:
             raise ValueError(f"unsupported emotion mode: {emotion_mode}")
 
@@ -286,6 +359,8 @@ class IndexTTS2Service:
             "use_fp16": bool(payload.get("use_fp16", False)),
             "use_cuda_kernel": bool(payload.get("use_cuda_kernel", False)),
             "use_deepspeed": bool(payload.get("use_deepspeed", False)),
+            "use_accel": bool(payload.get("use_accel", False)),
+            "use_torch_compile": bool(payload.get("use_torch_compile", False)),
         }
 
 
@@ -321,6 +396,10 @@ def _runtime_cache_env(paths: AppPaths) -> dict[str, str]:
     }
 
 
+def _worker_timeout_seconds() -> float:
+    return float(os.environ.get("INDEXTTS2_WORKER_TIMEOUT_SECONDS", "1800"))
+
+
 def _model_dir(paths: AppPaths) -> Path:
     configured = os.environ.get("INDEXTTS2_MODEL_DIR")
     if configured:
@@ -333,6 +412,12 @@ def _cfg_path(paths: AppPaths) -> Path:
     if configured:
         return Path(configured).resolve()
     return _model_dir(paths) / "config.yaml"
+
+
+def _is_project_local(paths: AppPaths, path: Path) -> bool:
+    root = paths.project_root.resolve()
+    resolved = path.resolve()
+    return resolved == root or root in resolved.parents
 
 
 def _missing_checkpoint_files(paths: AppPaths) -> list[str]:
@@ -354,6 +439,8 @@ def _parse_emo_vector(value: object) -> list[float]:
     for item in vector:
         if item < 0 or item > 1:
             raise ValueError("emo_vector values must be between 0 and 1")
+    if sum(vector) > 0.8:
+        raise ValueError("emo_vector values must sum to 0.8 or less")
     return vector
 
 
@@ -369,6 +456,8 @@ def _validate_emotion_source_exclusive(payload: dict[str, Any], emotion_mode: st
         raise ValueError("emotion source must be one of audio_prompt, vector, or text_prompt")
     if emotion_mode == "same_voice" and sources:
         raise ValueError("same_voice emotion mode cannot include an emotion source")
+    if emotion_mode == "text_prompt" and sources in ([], ["text_prompt"]):
+        return
     if emotion_mode in {"audio_prompt", "vector", "text_prompt"} and sources != [emotion_mode]:
         raise ValueError(f"emotion_mode {emotion_mode} requires its matching emotion source")
 
@@ -393,4 +482,6 @@ def _history_params(request: dict[str, Any]) -> dict[str, Any]:
 
 def _error_summary(error: Exception) -> str:
     text = str(error).strip() or type(error).__name__
+    if isinstance(error, AppBackendError):
+        text = f"{error.code}: {text}"
     return text.splitlines()[0][:500]

@@ -126,3 +126,37 @@ Acceptance:
 - Tests verify schema creation, voice save, history save, soft delete, and output path behavior.
 - Upstream pull verification confirms both preserved source behavior and AppShell startup.
 - Packaging notes list Python runtime, Electron files, local FFmpeg, SQLite data location, and model cache considerations.
+
+## Current Dual-Model Phase 1/2 Status
+
+Status date: 2026-07-02
+
+The Phase 1 runtime readiness work and Phase 2 parameterized workbench work from
+`docs/Plan/11-dual-model-execution-plan.md` are implemented on branch
+`codex/model-api-adapter-alignment`.
+
+Implemented:
+
+- `/runtime-backends` exposes backend state, global busy status, active backend,
+  runtime paths, missing checkpoint details, and project-local override errors.
+- VoxCPM2 generation forwards length and bad-case retry controls and uses
+  `data/runtimes/voxcpm2/hf-cache` as the default model cache.
+- IndexTTS2 validates runtime/checkpoint readiness, preserves worker error
+  codes/details, enforces emotion vector total <= `0.8`, and forwards
+  acceleration toggles.
+- Settings renders runtime readiness cards for VoxCPM2 and IndexTTS2.
+- VoxCPM2 and IndexTTS2 pages expose the implemented Phase 2 controls.
+
+Verified:
+
+- Python targeted tests: 37 passed.
+- TypeScript typecheck: passed.
+- Renderer build: passed.
+- Electron syntax checks: passed.
+- Diff whitespace check: passed with CRLF warnings only.
+
+Next roadmap focus:
+
+- Phase 3 job/take product loop.
+- Renderer and Electron IPC tests for the new status/error surfaces.
+- Real-model smoke tests with project-local VoxCPM2 and IndexTTS2 assets.

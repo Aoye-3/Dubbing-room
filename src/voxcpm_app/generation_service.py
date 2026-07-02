@@ -32,8 +32,13 @@ class Synthesizer(Protocol):
         prompt_text: str,
         cfg_value: float,
         inference_timesteps: int,
+        min_len: int,
+        max_len: int,
         normalize: bool,
         denoise: bool,
+        retry_badcase: bool,
+        retry_badcase_max_times: int,
+        retry_badcase_ratio_threshold: float,
     ) -> tuple[int, np.ndarray]:
         ...
 
@@ -46,9 +51,22 @@ class ResolvedReference:
 
 
 class VoxCPMSynthesizer:
-    def __init__(self, *, model_id: str = "openbmb/VoxCPM2", device: str = "cuda"):
+    def __init__(
+        self,
+        *,
+        model_id: str = "openbmb/VoxCPM2",
+        device: str = "cuda",
+        cache_dir: str | None = None,
+        local_files_only: bool = False,
+        load_denoiser: bool = False,
+        zipenhancer_model_id: str = "iic/speech_zipenhancer_ans_multiloss_16k_base",
+    ):
         self.model_id = model_id
         self.device = device
+        self.cache_dir = cache_dir
+        self.local_files_only = local_files_only
+        self.load_denoiser = load_denoiser
+        self.zipenhancer_model_id = zipenhancer_model_id
         self._model = None
 
     def _get_model(self):
@@ -57,6 +75,10 @@ class VoxCPMSynthesizer:
 
             self._model = VoxCPM.from_pretrained(
                 self.model_id,
+                load_denoiser=self.load_denoiser,
+                zipenhancer_model_id=self.zipenhancer_model_id,
+                cache_dir=self.cache_dir,
+                local_files_only=self.local_files_only,
                 device=self.device,
                 optimize=str(self.device).startswith("cuda"),
             )
@@ -71,16 +93,21 @@ class VoxCPMSynthesizer:
         prompt_text: str,
         cfg_value: float,
         inference_timesteps: int,
+        min_len: int,
+        max_len: int,
         normalize: bool,
         denoise: bool,
+        retry_badcase: bool,
+        retry_badcase_max_times: int,
+        retry_badcase_ratio_threshold: float,
     ) -> tuple[int, np.ndarray]:
         if prompt_text and not reference_audio_path:
             raise ValueError("prompt_text requires a reference audio")
 
         model = self._get_model()
         control = re.sub(r"[()（）]", "", control_instruction or "").strip()
-        final_text = f"({control}){input_text}" if control else input_text
         prompt_text_clean = (prompt_text or "").strip()
+        final_text = input_text if prompt_text_clean else f"({control}){input_text}" if control else input_text
         wav = model.generate(
             text=final_text,
             prompt_wav_path=reference_audio_path if prompt_text_clean else None,
@@ -88,8 +115,13 @@ class VoxCPMSynthesizer:
             reference_wav_path=reference_audio_path,
             cfg_value=float(cfg_value),
             inference_timesteps=int(inference_timesteps),
+            min_len=int(min_len),
+            max_len=int(max_len),
             normalize=bool(normalize),
             denoise=bool(denoise) and reference_audio_path is not None,
+            retry_badcase=bool(retry_badcase),
+            retry_badcase_max_times=int(retry_badcase_max_times),
+            retry_badcase_ratio_threshold=float(retry_badcase_ratio_threshold),
         )
         return int(model.tts_model.sample_rate), wav
 
@@ -105,7 +137,12 @@ class GenerationService:
         coordinator: RuntimeCoordinator = RUNTIME_COORDINATOR,
     ):
         self.paths = paths
-        self.synthesizer = synthesizer or VoxCPMSynthesizer(model_id=model_id, device=device)
+        self.synthesizer = synthesizer or VoxCPMSynthesizer(
+            model_id=model_id,
+            device=device,
+            cache_dir=str(paths.project_root / "data" / "runtimes" / "voxcpm2" / "hf-cache"),
+            load_denoiser=False,
+        )
         self.device = device
         self.coordinator = coordinator
 
@@ -117,7 +154,7 @@ class GenerationService:
             enabled=True,
             configured=True,
             loaded=getattr(self.synthesizer, "_model", None) is not None,
-            busy=bool(state["busy"]),
+            busy=bool(state["runtime_busy"]),
             device=self.device,
             last_error=str(state["last_error"]),
             capabilities=[
@@ -128,6 +165,19 @@ class GenerationService:
             ],
             active_job_id=state["active_job_id"] if isinstance(state["active_job_id"], str) else None,
             started_at=state["started_at"] if isinstance(state["started_at"], str) else None,
+            state="busy" if state["runtime_busy"] else "loaded" if getattr(self.synthesizer, "_model", None) is not None else "configured",
+            details={
+                "model_id": getattr(self.synthesizer, "model_id", "openbmb/VoxCPM2"),
+                "cache_dir": getattr(
+                    self.synthesizer,
+                    "cache_dir",
+                    str(self.paths.project_root / "data" / "runtimes" / "voxcpm2" / "hf-cache"),
+                ),
+                "local_files_only": bool(getattr(self.synthesizer, "local_files_only", False)),
+                "load_denoiser": bool(getattr(self.synthesizer, "load_denoiser", False)),
+                "runtime_busy": bool(state["runtime_busy"]),
+                "active_backend": state["active_backend"],
+            },
         )
 
     def generate_audio(self, payload: dict[str, Any]) -> GenerationRecord:
@@ -151,7 +201,8 @@ class GenerationService:
         mark_generation_running(self.paths, generation.id)
 
         try:
-            with self.coordinator.lease("voxcpm2", job_id=generation.id):
+            active_job_id = str(payload.get("generation_job_id") or generation.id)
+            with self.coordinator.lease("voxcpm2", job_id=active_job_id):
                 sample_rate, audio = self.synthesizer.synthesize(
                     input_text=input_text,
                     control_instruction=str(payload.get("control_instruction") or ""),
@@ -159,8 +210,13 @@ class GenerationService:
                     prompt_text=str(payload.get("prompt_text") or ""),
                     cfg_value=float(payload.get("cfg_value", 2.0)),
                     inference_timesteps=int(payload.get("inference_timesteps", 10)),
+                    min_len=int(payload.get("min_len", 2)),
+                    max_len=int(payload.get("max_len", 4096)),
                     normalize=bool(payload.get("normalize", False)),
                     denoise=bool(payload.get("denoise", False)),
+                    retry_badcase=bool(payload.get("retry_badcase", True)),
+                    retry_badcase_max_times=int(payload.get("retry_badcase_max_times", 3)),
+                    retry_badcase_ratio_threshold=float(payload.get("retry_badcase_ratio_threshold", 6.0)),
                 )
             output_path = self.paths.tmp_dir / f"{generation.id}-output.wav"
             output_path.parent.mkdir(parents=True, exist_ok=True)

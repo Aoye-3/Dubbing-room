@@ -168,6 +168,7 @@ def _default_mode(backend_id: str) -> str:
 def _voxcpm_payload(job: GenerationJobRecord, params: dict[str, Any]) -> dict[str, Any]:
     return {
         **params,
+        "generation_job_id": job.id,
         "input_text": str(params.get("input_text") or job.input_text),
         "reference": params.get("reference") if isinstance(params.get("reference"), dict) else {"kind": "none"},
     }
@@ -176,6 +177,7 @@ def _voxcpm_payload(job: GenerationJobRecord, params: dict[str, Any]) -> dict[st
 def _indextts2_payload(job: GenerationJobRecord, params: dict[str, Any]) -> dict[str, Any]:
     return {
         **params,
+        "generation_job_id": job.id,
         "text": str(params.get("text") or params.get("input_text") or job.input_text),
     }
 

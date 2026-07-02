@@ -56,6 +56,7 @@ Out of scope for the first implementation:
 - [08 Frontend App Shell](08-frontend-app-shell.md)
 - [09 VoxCPM-Box Scope and Upstream Sync](09-voxcpm-box-scope-and-upstream-sync.md)
 - [10 双模型互补应用壳 PRD](10-dual-model-integration-prd.md)
+- [11 Dual-Model AppShell Execution Plan](../Plan/11-dual-model-execution-plan.md)
 - [完整双模型功能实现 PRD](../PRD/dual-model-audio-appshell-full-implementation-prd.md)
 - [Technical Documentation Index](../technical/README.md)
 - [ADR 0001: Local SQLite and File Storage](adr/0001-local-sqlite-and-file-storage.md)

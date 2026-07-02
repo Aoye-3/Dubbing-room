@@ -4,6 +4,8 @@ import json
 import sys
 from pathlib import Path
 
+import soundfile as sf
+
 
 def main() -> int:
     try:
@@ -14,7 +16,13 @@ def main() -> int:
     except Exception as exc:
         print(
             json.dumps(
-                {"ok": False, "error": str(exc).splitlines()[0][:500], "type": type(exc).__name__},
+                {
+                    "ok": False,
+                    "error": str(exc).splitlines()[0][:500],
+                    "type": type(exc).__name__,
+                    "code": _error_code(exc),
+                    "details": {},
+                },
                 ensure_ascii=False,
             )
         )
@@ -37,6 +45,8 @@ def run(payload: dict[str, object]) -> dict[str, object]:
         use_fp16=bool(payload.get("use_fp16", False)),
         use_cuda_kernel=bool(payload.get("use_cuda_kernel", False)),
         use_deepspeed=bool(payload.get("use_deepspeed", False)),
+        use_accel=bool(payload.get("use_accel", False)),
+        use_torch_compile=bool(payload.get("use_torch_compile", False)),
     )
     tts.infer(
         spk_audio_prompt=str(payload["spk_audio_prompt"]),
@@ -60,7 +70,21 @@ def run(payload: dict[str, object]) -> dict[str, object]:
         repetition_penalty=float(payload.get("repetition_penalty", 10.0)),
         max_mel_tokens=int(payload.get("max_mel_tokens", 1500)),
     )
+    if not output_path.exists() or not output_path.is_file():
+        raise RuntimeError(f"generated output missing: {output_path}")
+    sf.info(str(output_path))
     return {"output_path": str(output_path)}
+
+
+def _error_code(exc: Exception) -> str:
+    text = str(exc).lower()
+    if "checkpoint" in text:
+        return "checkpoints_missing"
+    if "runtime" in text:
+        return "runtime_missing"
+    if "output" in text and "missing" in text:
+        return "output_missing"
+    return "worker_failed"
 
 
 if __name__ == "__main__":

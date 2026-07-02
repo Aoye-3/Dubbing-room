@@ -20,6 +20,8 @@ class RuntimeBackendStatus:
     capabilities: list[str]
     active_job_id: str | None = None
     started_at: str | None = None
+    state: str = "configured"
+    details: dict[str, object] | None = None
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
@@ -66,6 +68,8 @@ class RuntimeCoordinator:
     def status(self, backend_id: str) -> dict[str, object]:
         return {
             "busy": self.is_busy_backend(backend_id),
+            "runtime_busy": self.is_busy(),
+            "active_backend": self._active_backend,
             "active_job_id": self._active_job_id if self._active_backend == backend_id else None,
             "started_at": self._started_at if self._active_backend == backend_id else None,
             "last_error": self.last_error(backend_id),

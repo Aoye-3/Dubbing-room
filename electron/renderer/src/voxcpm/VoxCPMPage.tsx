@@ -31,8 +31,13 @@ export function VoxCPMPage({
   const [promptText, setPromptText] = useState("");
   const [cfgValue, setCfgValue] = useState(2);
   const [inferenceTimesteps, setInferenceTimesteps] = useState(10);
+  const [minLen, setMinLen] = useState(2);
+  const [maxLen, setMaxLen] = useState(4096);
   const [normalize, setNormalize] = useState(false);
   const [denoise, setDenoise] = useState(false);
+  const [retryBadcase, setRetryBadcase] = useState(true);
+  const [retryBadcaseMaxTimes, setRetryBadcaseMaxTimes] = useState(3);
+  const [retryBadcaseRatioThreshold, setRetryBadcaseRatioThreshold] = useState(6);
   const [referenceKind, setReferenceKind] = useState<ReferenceKind>(modeKey === "voice-design" ? "none" : "saved_voice");
   const [selectedVoiceId, setSelectedVoiceId] = useState("");
   const [uploadedFile, setUploadedFile] = useState<SelectedAudioFile | null>(null);
@@ -128,17 +133,26 @@ export function VoxCPMPage({
       setError(t("missingReference"));
       return;
     }
+    if (modeKey === "ultimate-cloning" && !promptText.trim()) {
+      setError("prompt_text is required for ultimate cloning.");
+      return;
+    }
 
     setIsGenerating(true);
     try {
       const record = await apiClient.generateAudio({
         input_text: inputText,
-        control_instruction: modeKey === "ultimate-cloning" && promptText.trim() ? "" : controlInstruction,
+        control_instruction: modeKey === "ultimate-cloning" ? "" : controlInstruction,
         prompt_text: modeKey === "ultimate-cloning" ? promptText : "",
         cfg_value: cfgValue,
         inference_timesteps: inferenceTimesteps,
+        min_len: minLen,
+        max_len: maxLen,
         normalize,
         denoise,
+        retry_badcase: retryBadcase,
+        retry_badcase_max_times: retryBadcaseMaxTimes,
+        retry_badcase_ratio_threshold: retryBadcaseRatioThreshold,
         reference,
       });
       if (record) {
@@ -209,6 +223,14 @@ export function VoxCPMPage({
             <span>{t("steps")}</span>
             <input min={1} max={100} step={1} type="number" value={inferenceTimesteps} onChange={(event) => setInferenceTimesteps(Number(event.target.value))} />
           </label>
+          <label>
+            <span>min_len</span>
+            <input min={0} max={4096} step={1} type="number" value={minLen} onChange={(event) => setMinLen(Number(event.target.value))} />
+          </label>
+          <label>
+            <span>max_len</span>
+            <input min={1} max={8192} step={1} type="number" value={maxLen} onChange={(event) => setMaxLen(Number(event.target.value))} />
+          </label>
           <label className="checkbox-row">
             <input checked={normalize} type="checkbox" onChange={(event) => setNormalize(event.target.checked)} />
             <span>{t("normalize")}</span>
@@ -216,6 +238,18 @@ export function VoxCPMPage({
           <label className="checkbox-row">
             <input checked={denoise} type="checkbox" onChange={(event) => setDenoise(event.target.checked)} />
             <span>{t("denoise")}</span>
+          </label>
+          <label className="checkbox-row">
+            <input checked={retryBadcase} type="checkbox" onChange={(event) => setRetryBadcase(event.target.checked)} />
+            <span>retry_badcase</span>
+          </label>
+          <label>
+            <span>retry_badcase_max_times</span>
+            <input min={0} max={10} step={1} type="number" value={retryBadcaseMaxTimes} onChange={(event) => setRetryBadcaseMaxTimes(Number(event.target.value))} />
+          </label>
+          <label>
+            <span>retry_badcase_ratio_threshold</span>
+            <input min={0} max={20} step={0.5} type="number" value={retryBadcaseRatioThreshold} onChange={(event) => setRetryBadcaseRatioThreshold(Number(event.target.value))} />
           </label>
         </div>
       </div>

@@ -15,6 +15,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from voxcpm_app.backend_server import build_handler
 from voxcpm_app.generation_service import GenerationService
+from voxcpm_app.generation_service import VoxCPMSynthesizer
 from voxcpm_app.job_queue import GenerationJobQueue
 from voxcpm_app.job_store import create_generation_job
 from voxcpm_app.paths import AppPaths
@@ -62,6 +63,67 @@ def test_generation_service_generates_without_reference_and_records_history(tmp_
     assert (tmp_path / record.output_audio_path).exists()
     assert synth.calls[0]["reference_audio_path"] is None
     assert synth.calls[0]["prompt_text"] == ""
+    assert synth.calls[0]["min_len"] == 2
+    assert synth.calls[0]["max_len"] == 4096
+    assert synth.calls[0]["retry_badcase"] is True
+
+
+def test_generation_service_reports_generation_job_id_to_runtime(tmp_path: Path):
+    paths = AppPaths.from_project_root(tmp_path)
+    coordinator = RuntimeCoordinator()
+
+    class ObservingSynthesizer(FakeSynthesizer):
+        def __init__(self):
+            super().__init__()
+            self.active_job_id = None
+
+        def synthesize(self, **kwargs):
+            self.active_job_id = coordinator.status("voxcpm2")["active_job_id"]
+            return super().synthesize(**kwargs)
+
+    synth = ObservingSynthesizer()
+    service = GenerationService(paths, synthesizer=synth, coordinator=coordinator)
+
+    record = service.generate_audio(generation_payload(generation_job_id="job-123"))
+
+    assert record.status == "succeeded"
+    assert synth.active_job_id == "job-123"
+
+
+def test_voxcpm_synthesizer_ignores_control_for_ultimate_clone():
+    class FakeModel:
+        def __init__(self):
+            self.calls: list[dict] = []
+            self.tts_model = type("TTS", (), {"sample_rate": 48000})()
+
+        def generate(self, **kwargs):
+            self.calls.append(kwargs)
+            return np.zeros(10, dtype=np.float32)
+
+    fake_model = FakeModel()
+    synth = VoxCPMSynthesizer()
+    synth._model = fake_model
+
+    sample_rate, _audio = synth.synthesize(
+        input_text="Target text.",
+        control_instruction="cheerful",
+        reference_audio_path="speaker.wav",
+        prompt_text="reference transcript",
+        cfg_value=2.0,
+        inference_timesteps=10,
+        min_len=2,
+        max_len=4096,
+        normalize=False,
+        denoise=False,
+        retry_badcase=True,
+        retry_badcase_max_times=3,
+        retry_badcase_ratio_threshold=6.0,
+    )
+
+    assert sample_rate == 48000
+    assert fake_model.calls[0]["text"] == "Target text."
+    assert fake_model.calls[0]["prompt_wav_path"] == "speaker.wav"
+    assert fake_model.calls[0]["reference_wav_path"] == "speaker.wav"
 
 
 def test_generation_service_copies_uploaded_reference_to_app_tmp(tmp_path: Path):
@@ -167,6 +229,11 @@ def test_backend_runtime_status_reports_voxcpm2_busy_job(tmp_path: Path):
         assert voxcpm2["busy"] is True
         assert voxcpm2["active_job_id"] == "voxcpm-job"
         assert isinstance(voxcpm2["started_at"], str)
+        indextts2 = status["items"][1]
+        assert indextts2["backend_id"] == "indextts2"
+        assert indextts2["busy"] is True
+        assert indextts2["active_job_id"] is None
+        assert indextts2["details"]["active_backend"] == "voxcpm2"
     finally:
         server.shutdown()
         server.server_close()
@@ -183,6 +250,9 @@ def test_backend_returns_json_error_for_invalid_generation_request(tmp_path: Pat
             body = json.loads(error.read().decode("utf-8"))
             assert error.code == 400
             assert body["error"] == "input_text is required"
+            assert body["type"] == "ValueError"
+            assert body["code"] == "validation_error"
+            assert body["details"] == {}
         else:
             raise AssertionError("expected HTTP 400")
     finally:

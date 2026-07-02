@@ -4,6 +4,7 @@
 
 ## Core Documents
 
+- [Phase 1/2 Runtime and UI Implementation Notes](phase-1-2-runtime-ui-implementation.md)
 - [系统架构](architecture.md)
 - [Agent 协作与开发规则](agents.md)
 - [模型与运行时](models-runtime.md)

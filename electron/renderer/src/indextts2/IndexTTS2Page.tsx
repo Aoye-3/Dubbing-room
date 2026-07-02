@@ -51,10 +51,18 @@ export function IndexTTS2Page({
   const [numBeams, setNumBeams] = useState(3);
   const [repetitionPenalty, setRepetitionPenalty] = useState(10);
   const [maxMelTokens, setMaxMelTokens] = useState(1500);
+  const [useFp16, setUseFp16] = useState(false);
+  const [useCudaKernel, setUseCudaKernel] = useState(false);
+  const [useDeepspeed, setUseDeepspeed] = useState(false);
+  const [useAccel, setUseAccel] = useState(false);
+  const [useTorchCompile, setUseTorchCompile] = useState(false);
   const [generatedRecord, setGeneratedRecord] = useState<AppGeneration | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState("");
   const runtimeUnavailable = runtime ? !runtime.configured || runtime.busy : false;
+  const emotionVectorTotal = emotionVectorFields.reduce((sum, field) => sum + emotionVector[field], 0);
+  const vectorTooHigh = emotionMode === "vector" && emotionVectorTotal > 0.8;
+  const missingEmotionAudio = emotionMode === "audio_prompt" && !emotionFile;
 
   const loadRuntime = useCallback(async () => {
     try {
@@ -117,6 +125,14 @@ export function IndexTTS2Page({
       setError(t("missingReference"));
       return;
     }
+    if (missingEmotionAudio) {
+      setError(t("emotionReference"));
+      return;
+    }
+    if (vectorTooHigh) {
+      setError("emo_vector total must be 0.8 or less.");
+      return;
+    }
     const payload: IndexTTS2Payload = {
       text,
       speaker,
@@ -133,6 +149,11 @@ export function IndexTTS2Page({
       num_beams: numBeams,
       repetition_penalty: repetitionPenalty,
       max_mel_tokens: maxMelTokens,
+      use_fp16: useFp16,
+      use_cuda_kernel: useCudaKernel,
+      use_deepspeed: useDeepspeed,
+      use_accel: useAccel,
+      use_torch_compile: useTorchCompile,
     };
     if (emotionMode === "audio_prompt" && emotionFile) {
       payload.emotion_audio = { kind: "upload", path: emotionFile.path };
@@ -167,6 +188,14 @@ export function IndexTTS2Page({
       setError(t("missingReference"));
       return;
     }
+    if (missingEmotionAudio) {
+      setError(t("emotionReference"));
+      return;
+    }
+    if (vectorTooHigh) {
+      setError("emo_vector total must be 0.8 or less.");
+      return;
+    }
     const payload: IndexTTS2Payload = {
       text,
       speaker,
@@ -183,6 +212,11 @@ export function IndexTTS2Page({
       num_beams: numBeams,
       repetition_penalty: repetitionPenalty,
       max_mel_tokens: maxMelTokens,
+      use_fp16: useFp16,
+      use_cuda_kernel: useCudaKernel,
+      use_deepspeed: useDeepspeed,
+      use_accel: useAccel,
+      use_torch_compile: useTorchCompile,
     };
     if (emotionMode === "audio_prompt" && emotionFile) {
       payload.emotion_audio = { kind: "upload", path: emotionFile.path };
@@ -227,11 +261,11 @@ export function IndexTTS2Page({
           <span>{runtime ? `${runtime.display_name} / ${runtime.device}` : status.message}</span>
           <p>{runtime?.configured ? runtime.last_error || "configured" : runtime?.last_error || t("missingRuntime")}</p>
         </div>
-        <button className="primary-action" disabled={!appReady || isGenerating || runtimeUnavailable} onClick={generate} type="button">
+        <button className="primary-action" disabled={!appReady || isGenerating || runtimeUnavailable || vectorTooHigh || missingEmotionAudio} onClick={generate} type="button">
           <Sparkles size={18} />
           {isGenerating ? status.message : t("generate")}
         </button>
-        <button className="ghost-action" disabled={!appReady || isGenerating || runtimeUnavailable} onClick={submitJob} type="button">
+        <button className="ghost-action" disabled={!appReady || isGenerating || runtimeUnavailable || vectorTooHigh || missingEmotionAudio} onClick={submitJob} type="button">
           <RefreshCw size={18} />
           {t("queueJob")}
         </button>
@@ -305,6 +339,9 @@ export function IndexTTS2Page({
               )}
               {emotionMode === "vector" && (
                 <div className="emotion-vector-grid">
+                  <p className={emotionVectorTotal > 0.8 ? "status-line error" : "status-line"}>
+                    {`emo_vector total: ${emotionVectorTotal.toFixed(2)} / 0.80`}
+                  </p>
                   {emotionVectorFields.map((field) => (
                     <label key={field}>
                       <span>{field}</span>
@@ -352,6 +389,11 @@ export function IndexTTS2Page({
                   <NumberField label="num_beams" value={numBeams} setValue={setNumBeams} min={1} max={20} step={1} />
                   <NumberField label="repetition_penalty" value={repetitionPenalty} setValue={setRepetitionPenalty} min={0.1} max={50} step={0.1} />
                   <NumberField label="max_mel_tokens" value={maxMelTokens} setValue={setMaxMelTokens} min={100} max={5000} step={100} />
+                  <label className="checkbox-row"><input checked={useFp16} type="checkbox" onChange={(event) => setUseFp16(event.target.checked)} /><span>use_fp16</span></label>
+                  <label className="checkbox-row"><input checked={useCudaKernel} type="checkbox" onChange={(event) => setUseCudaKernel(event.target.checked)} /><span>use_cuda_kernel</span></label>
+                  <label className="checkbox-row"><input checked={useDeepspeed} type="checkbox" onChange={(event) => setUseDeepspeed(event.target.checked)} /><span>use_deepspeed</span></label>
+                  <label className="checkbox-row"><input checked={useAccel} type="checkbox" onChange={(event) => setUseAccel(event.target.checked)} /><span>use_accel</span></label>
+                  <label className="checkbox-row"><input checked={useTorchCompile} type="checkbox" onChange={(event) => setUseTorchCompile(event.target.checked)} /><span>use_torch_compile</span></label>
                 </div>
               )}
             </div>

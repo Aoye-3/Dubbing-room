@@ -85,8 +85,13 @@ export type GenerateAudioPayload = {
   prompt_text: string;
   cfg_value: number;
   inference_timesteps: number;
+  min_len: number;
+  max_len: number;
   normalize: boolean;
   denoise: boolean;
+  retry_badcase: boolean;
+  retry_badcase_max_times: number;
+  retry_badcase_ratio_threshold: number;
   reference:
     | { kind: "none" }
     | { kind: "upload"; path: string }
@@ -105,6 +110,8 @@ export type RuntimeBackendStatus = {
   capabilities: string[];
   active_job_id?: string | null;
   started_at?: string | null;
+  state?: string;
+  details?: Record<string, unknown> | null;
 };
 
 export type GenerationJob = {
@@ -171,5 +178,9 @@ export type IndexTTS2Payload = {
   num_beams: number;
   repetition_penalty: number;
   max_mel_tokens: number;
+  use_fp16: boolean;
+  use_cuda_kernel: boolean;
+  use_deepspeed: boolean;
+  use_accel: boolean;
+  use_torch_compile: boolean;
 };
-
