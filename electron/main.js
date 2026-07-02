@@ -2,13 +2,17 @@ const { app, BrowserWindow, dialog, ipcMain, shell } = require("electron");
 const { spawn, execFile } = require("child_process");
 const fs = require("fs");
 const http = require("http");
+const net = require("net");
 const path = require("path");
 
 const projectDir = path.resolve(__dirname, "..");
-const mainPort = 8808;
-const mainUrl = `http://127.0.0.1:${mainPort}`;
-const appBackendPort = 8818;
-const appBackendUrl = `http://127.0.0.1:${appBackendPort}`;
+const backendHost = "127.0.0.1";
+const defaultMainPort = 8808;
+const defaultAppBackendPort = 8818;
+let mainPort = defaultMainPort;
+let mainUrl = localUrl(mainPort);
+let appBackendPort = defaultAppBackendPort;
+let appBackendUrl = localUrl(appBackendPort);
 const outLogPath = path.join(projectDir, "voxcpm_webui.out.log");
 const errLogPath = path.join(projectDir, "voxcpm_webui.err.log");
 const appBackendOutLogPath = path.join(projectDir, "voxcpm_app_backend.out.log");
@@ -34,6 +38,15 @@ let legacyBackendProcess = null;
 let appBackendProcess = null;
 let isQuitting = false;
 let lastStatus = { state: "starting", message: "Starting VoxCPM AppShell", detail: "" };
+
+function localUrl(port) {
+  return `http://${backendHost}:${port}`;
+}
+
+function refreshBackendUrls() {
+  mainUrl = localUrl(mainPort);
+  appBackendUrl = localUrl(appBackendPort);
+}
 
 function sendStatus(state, message, detail = "") {
   lastStatus = { state, message, detail };
@@ -66,6 +79,63 @@ function pythonEnv() {
 function truncateLogs(stdoutPath, stderrPath) {
   fs.writeFileSync(stdoutPath, "", "utf8");
   fs.writeFileSync(stderrPath, "", "utf8");
+}
+
+function parsePortEnv(envName) {
+  const value = process.env[envName];
+  if (!value) {
+    return null;
+  }
+  const port = Number(value);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error(`${envName} must be a TCP port between 1 and 65535.`);
+  }
+  return port;
+}
+
+function canListen(port) {
+  return new Promise((resolve) => {
+    const server = net.createServer();
+    server.once("error", () => resolve(false));
+    server.once("listening", () => {
+      server.close(() => resolve(true));
+    });
+    server.listen(port, backendHost);
+  });
+}
+
+async function pickPort({ envName, defaultPort, endPort }) {
+  const explicitPort = parsePortEnv(envName);
+  if (explicitPort !== null) {
+    if (await canListen(explicitPort)) {
+      return explicitPort;
+    }
+    throw new Error(`${envName}=${explicitPort} is already in use on ${backendHost}.`);
+  }
+
+  for (let port = defaultPort; port <= endPort; port += 1) {
+    if (await canListen(port)) {
+      return port;
+    }
+  }
+  throw new Error(`No available local port in range ${defaultPort}-${endPort}.`);
+}
+
+async function configureBackendPorts() {
+  if (shouldStartLegacyWebUI) {
+    mainPort = await pickPort({
+      envName: "VOXCPM_LEGACY_WEBUI_PORT",
+      defaultPort: defaultMainPort,
+      endPort: 8899,
+    });
+  } else {
+    appBackendPort = await pickPort({
+      envName: "VOXCPM_APP_BACKEND_PORT",
+      defaultPort: defaultAppBackendPort,
+      endPort: 8899,
+    });
+  }
+  refreshBackendUrls();
 }
 
 function isUrlReady(url) {
@@ -292,7 +362,7 @@ function cleanupResidualBackends() {
     const escapedProject = projectDir.replace(/'/g, "''");
     const command = [
       "$rows = Get-CimInstance Win32_Process -Filter \"name = 'python.exe'\"",
-      `| Where-Object { $_.CommandLine -like '*${escapedProject.replace(/\\/g, "\\\\")}*app.py --port 8808*' -or $_.CommandLine -like '*app.py --port 8808 --device cuda*' };`,
+      `| Where-Object { $_.CommandLine -like '*${escapedProject.replace(/\\/g, "\\\\")}*app.py --port ${mainPort}*' -or $_.CommandLine -like '*app.py --port ${mainPort} --device cuda*' };`,
       "foreach ($row in $rows) { Stop-Process -Id $row.ProcessId -Force -ErrorAction SilentlyContinue }"
     ].join(" ");
 
@@ -397,6 +467,10 @@ ipcMain.handle("get-shell-state", () => ({
   status: lastStatus,
 }));
 
+ipcMain.on("media-url", (event, projectRelativePath) => {
+  event.returnValue = `${appBackendUrl}/media?path=${encodeURIComponent(projectRelativePath)}`;
+});
+
 ipcMain.handle("app-service", (_event, request) => {
   const action = request && typeof request.action === "string" ? request.action : "";
   const payload = request && typeof request.payload === "object" ? request.payload : {};
@@ -462,7 +536,8 @@ ipcMain.handle("select-audio-file", async () => {
   };
 });
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  await configureBackendPorts();
   createWindow();
   if (shouldStartLegacyWebUI) {
     bootWebUI().catch((error) => {
@@ -473,6 +548,11 @@ app.whenReady().then(() => {
   bootAppBackend().catch((error) => {
     sendStatus("failed", "Startup error", error.stack || String(error));
   });
+}).catch((error) => {
+  const detail = error.stack || String(error);
+  sendStatus("failed", "Startup error", detail);
+  dialog.showErrorBox("VoxCPM startup failed", detail);
+  app.quit();
 });
 
 app.on("before-quit", async (event) => {

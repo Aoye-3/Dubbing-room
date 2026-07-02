@@ -1323,6 +1323,13 @@ with gr.Blocks(title="VoxCPM LoRA WebUI", theme=gr.themes.Soft(), css=custom_css
     )
 
 if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="VoxCPM LoRA Training/Inference WebUI")
+    parser.add_argument("--host", default=os.environ.get("VOXCPM_LORA_HOST", "127.0.0.1"))
+    parser.add_argument("--port", type=int, default=int(os.environ.get("VOXCPM_LORA_PORT", "7860")))
+    args = parser.parse_args()
+
     # Ensure lora directory exists
     os.makedirs("lora", exist_ok=True)
-    app.queue().launch(server_name="0.0.0.0", server_port=7860)
+    app.queue().launch(server_name=args.host, server_port=args.port)

@@ -134,11 +134,11 @@ function SettingsPage({
           <dt>{t("appMode")}</dt>
           <dd>{shellState?.appMode ?? "app-shell"}</dd>
           <dt>{t("port")}</dt>
-          <dd>{shellState?.mainPort ?? 8818}</dd>
+          <dd>{shellState?.mainPort ?? "--"}</dd>
           <dt>{t("appBackend")}</dt>
-          <dd>{shellState?.appBackendUrl ?? "http://127.0.0.1:8818"}</dd>
+          <dd>{shellState?.appBackendUrl ?? "--"}</dd>
           <dt>{t("legacyBackend")}</dt>
-          <dd>{shellState?.legacyBackendUrl ?? "http://127.0.0.1:8808"}</dd>
+          <dd>{shellState?.legacyBackendUrl ?? "--"}</dd>
         </dl>
       </div>
       <div className="settings-panel">
@@ -158,7 +158,7 @@ function SettingsPage({
         <h2>{t("localPaths")}</h2>
         <dl>
           <dt>{t("project")}</dt>
-          <dd>{shellState?.projectDir ?? "F:\\.VoxCPM\\VoxCPM"}</dd>
+          <dd>{shellState?.projectDir ?? "--"}</dd>
           <dt>{t("outputLog")}</dt>
           <dd>{shellState?.appBackendOutLogPath ?? "voxcpm_app_backend.out.log"}</dd>
           <dt>{t("errorLog")}</dt>

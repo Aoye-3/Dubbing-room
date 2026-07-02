@@ -41,7 +41,7 @@ contextBridge.exposeInMainWorld("voxcpmShell", {
     return ipcRenderer.invoke("select-generation-take", payload);
   },
   mediaUrl(projectRelativePath) {
-    return `http://127.0.0.1:8818/media?path=${encodeURIComponent(projectRelativePath)}`;
+    return ipcRenderer.sendSync("media-url", projectRelativePath);
   },
   listVoices(payload = {}) {
     return ipcRenderer.invoke("app-service", { action: "list-voices", payload });

@@ -11,8 +11,10 @@ from tkinter import messagebox, scrolledtext, ttk
 
 
 PROJECT_DIR = Path(__file__).resolve().parent
-MAIN_PORT = 8808
-LORA_PORT = 7860
+DEFAULT_MAIN_PORT = 8808
+DEFAULT_LORA_PORT = 7860
+MAIN_PORT = DEFAULT_MAIN_PORT
+LORA_PORT = DEFAULT_LORA_PORT
 MAIN_URL = f"http://127.0.0.1:{MAIN_PORT}"
 LORA_URL = f"http://127.0.0.1:{LORA_PORT}"
 MAIN_OUT_LOG = PROJECT_DIR / "voxcpm_webui.out.log"
@@ -43,6 +45,47 @@ def is_port_open(port: int) -> bool:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.settimeout(0.5)
         return sock.connect_ex(("127.0.0.1", port)) == 0
+
+
+def port_from_env(names: tuple[str, ...]) -> tuple[str, int] | None:
+    for name in names:
+        value = os.environ.get(name)
+        if not value:
+            continue
+        try:
+            port = int(value)
+        except ValueError as exc:
+            raise ValueError(f"{name} must be a TCP port between 1 and 65535.") from exc
+        if port < 1 or port > 65535:
+            raise ValueError(f"{name} must be a TCP port between 1 and 65535.")
+        return name, port
+    return None
+
+
+def pick_port(default_port: int, end_port: int, env_names: tuple[str, ...]) -> int:
+    explicit = port_from_env(env_names)
+    if explicit is not None:
+        name, port = explicit
+        if is_port_open(port):
+            raise RuntimeError(f"{name}={port} is already open on 127.0.0.1.")
+        return port
+
+    for port in range(default_port, end_port + 1):
+        if not is_port_open(port):
+            return port
+    raise RuntimeError(f"No available local port in range {default_port}-{end_port}.")
+
+
+def set_main_port(port: int) -> None:
+    global MAIN_PORT, MAIN_URL
+    MAIN_PORT = port
+    MAIN_URL = f"http://127.0.0.1:{MAIN_PORT}"
+
+
+def set_lora_port(port: int) -> None:
+    global LORA_PORT, LORA_URL
+    LORA_PORT = port
+    LORA_URL = f"http://127.0.0.1:{LORA_PORT}"
 
 
 def run_capture(args: list[str], timeout: int = 30) -> str:
@@ -278,49 +321,49 @@ class VoxCPMShell(tk.Tk):
             self.after(3000, self.auto_refresh)
 
     def start_main_cuda(self) -> None:
-        self.run_threaded(
-            "Start Main WebUI CUDA",
-            lambda: start_service(
-                "app.py",
-                ["--port", str(MAIN_PORT), "--device", "cuda"],
-                MAIN_OUT_LOG,
-                MAIN_ERR_LOG,
-                MAIN_PORT,
-            ),
-        )
+        self.start_main("cuda")
 
     def start_main_auto(self) -> None:
-        self.run_threaded(
-            "Start Main WebUI Auto",
-            lambda: start_service(
-                "app.py",
-                ["--port", str(MAIN_PORT), "--device", "auto"],
-                MAIN_OUT_LOG,
-                MAIN_ERR_LOG,
-                MAIN_PORT,
-            ),
-        )
+        self.start_main("auto")
 
     def start_main_cpu(self) -> None:
-        self.run_threaded(
-            "Start Main WebUI CPU",
-            lambda: start_service(
+        self.start_main("cpu")
+
+    def start_main(self, device: str) -> None:
+        title = f"Start Main WebUI {device.upper()}"
+
+        def task() -> str:
+            port = pick_port(DEFAULT_MAIN_PORT, 8899, ("VOXCPM_LEGACY_WEBUI_PORT", "MAIN_PORT"))
+            set_main_port(port)
+            return start_service(
                 "app.py",
-                ["--port", str(MAIN_PORT), "--device", "cpu"],
+                ["--port", str(port), "--device", device],
                 MAIN_OUT_LOG,
                 MAIN_ERR_LOG,
-                MAIN_PORT,
-            ),
-        )
+                port,
+            )
+
+        self.run_threaded(title, task)
 
     def start_lora(self) -> None:
+        def task() -> str:
+            port = pick_port(DEFAULT_LORA_PORT, 7899, ("VOXCPM_LORA_PORT", "LORA_PORT"))
+            set_lora_port(port)
+            return start_service(
+                "lora_ft_webui.py",
+                ["--port", str(port)],
+                LORA_OUT_LOG,
+                LORA_ERR_LOG,
+                port,
+            )
+
         self.run_threaded(
             "Start LoRA WebUI",
-            lambda: start_service("lora_ft_webui.py", [], LORA_OUT_LOG, LORA_ERR_LOG, LORA_PORT),
+            task,
         )
 
     def stop_main(self) -> None:
-        self.run_threaded("Stop Main WebUI", lambda: stop_processes(["app.py --port 8808"]))
+        self.run_threaded("Stop Main WebUI", lambda: stop_processes([f"app.py --port {MAIN_PORT}"]))
 
     def stop_lora(self) -> None:
         self.run_threaded("Stop LoRA WebUI", lambda: stop_processes(["lora_ft_webui.py"]))
@@ -352,7 +395,7 @@ class VoxCPMShell(tk.Tk):
     def on_close(self) -> None:
         self.status_var.set("Stopping backend services...")
         self.update_idletasks()
-        stop_processes(["app.py --port 8808", "lora_ft_webui.py"])
+        stop_processes([f"app.py --port {MAIN_PORT}", "lora_ft_webui.py"])
         self.destroy()
 
 

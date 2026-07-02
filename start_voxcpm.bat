@@ -3,8 +3,8 @@ setlocal EnableExtensions
 chcp 65001 >nul
 
 set "PROJECT_DIR=F:\.VoxCPM\VoxCPM"
-set "MAIN_PORT=8808"
-set "LORA_PORT=7860"
+if not defined MAIN_PORT set "MAIN_PORT=8808"
+if not defined LORA_PORT set "LORA_PORT=7860"
 
 cd /d "%PROJECT_DIR%" || (
     echo.
@@ -100,9 +100,9 @@ goto menu
 :lora_webui
 call :print_header "LoRA Training/Inference WebUI"
 echo URL: http://localhost:%LORA_PORT%
-echo Command: python lora_ft_webui.py
+echo Command: python lora_ft_webui.py --port %LORA_PORT%
 echo.
-python lora_ft_webui.py
+python lora_ft_webui.py --port %LORA_PORT%
 echo.
 pause
 goto menu
