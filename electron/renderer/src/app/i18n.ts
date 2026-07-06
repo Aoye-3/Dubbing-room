@@ -1,6 +1,8 @@
 export const messages = {
   en: {
     appTitle: "VoxCPM Desktop",
+    collapseMenu: "Collapse menu",
+    expandMenu: "Expand menu",
     navDesign: "Voice Design",
     navClone: "Voice Cloning",
     navUltimate: "Ultimate Cloning",
@@ -133,6 +135,8 @@ export const messages = {
     restartRequired: "Update applied. Restart AppShell when you are ready.",
   },
   zh: {
+    collapseMenu: "收起菜单",
+    expandMenu: "展开菜单",
     appTitle: "VoxCPM 桌面应用",
     navDesign: "声音设计",
     navClone: "声音克隆",

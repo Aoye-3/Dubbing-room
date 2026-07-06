@@ -30,50 +30,92 @@ button:disabled {
 }
 
 .app-shell {
+  --rail-width: 204px;
   display: grid;
-  grid-template-columns: 86px 1fr;
+  grid-template-columns: var(--rail-width) minmax(0, 1fr);
   height: 100vh;
   background: #f4f3f0;
+  transition: grid-template-columns 160ms ease;
+}
+
+.app-shell.rail-collapsed {
+  --rail-width: 86px;
 }
 
 .rail {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 26px;
-  padding: 28px 0 18px;
+  align-items: stretch;
+  gap: 20px;
+  padding: 28px 14px 18px;
   background: #e6e6e3;
   border-right: 1px solid #d3d2ce;
 }
 
 .brand-mark,
-.rail-button {
+.rail-toggle {
   display: grid;
   place-items: center;
-  width: 48px;
-  height: 48px;
 }
 
 .brand-mark {
+  width: 48px;
+  height: 48px;
   color: #9c741a;
   background: #f5efd9;
   border: 1px solid #dfc370;
+}
+
+.rail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 48px;
+}
+
+.rail-toggle {
+  width: 36px;
+  height: 36px;
+  color: #747671;
+  background: transparent;
+  border: 1px solid #d3d2ce;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.rail-toggle:hover,
+.rail-toggle:focus-visible {
+  color: #181b1e;
+  background: #faf9f5;
 }
 
 .rail-nav {
   display: flex;
   flex: 1;
   flex-direction: column;
-  align-items: center;
-  gap: 18px;
+  align-items: stretch;
+  gap: 8px;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .rail-button {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  height: 42px;
+  padding: 0 12px;
   color: #777977;
   background: transparent;
   border: 0;
-  border-radius: 50%;
+  border-radius: 8px;
   cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
 }
 
 .rail-button:hover,
@@ -83,7 +125,58 @@ button:disabled {
   box-shadow: 0 8px 22px rgba(30, 28, 22, 0.12);
 }
 
+.rail-button svg {
+  flex: 0 0 auto;
+}
+
+.rail-button span {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 750;
+  text-overflow: ellipsis;
+}
+
+.rail-collapsed .rail {
+  align-items: center;
+  gap: 26px;
+  padding: 28px 0 18px;
+}
+
+.rail-collapsed .rail-header {
+  flex-direction: column;
+  justify-content: flex-start;
+  min-height: auto;
+  gap: 14px;
+}
+
+.rail-collapsed .rail-toggle {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+}
+
+.rail-collapsed .rail-nav {
+  align-items: center;
+  gap: 18px;
+  overflow-y: visible;
+}
+
+.rail-collapsed .rail-button {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border-radius: 50%;
+}
+
+.rail-collapsed .rail-button span {
+  display: none;
+}
+
 .version {
+  align-self: center;
   color: #a0a09b;
   font-size: 12px;
 }
