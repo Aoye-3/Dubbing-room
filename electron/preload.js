@@ -40,6 +40,18 @@ contextBridge.exposeInMainWorld("voxcpmShell", {
   selectGenerationTake(payload) {
     return ipcRenderer.invoke("select-generation-take", payload);
   },
+  getUpdateStatus(payload) {
+    return ipcRenderer.invoke("get-update-status", payload);
+  },
+  preflightUpdate(payload) {
+    return ipcRenderer.invoke("preflight-update", payload);
+  },
+  fetchUpdate(payload) {
+    return ipcRenderer.invoke("fetch-update", payload);
+  },
+  applyUpdate(payload) {
+    return ipcRenderer.invoke("apply-update", payload);
+  },
   mediaUrl(projectRelativePath) {
     return ipcRenderer.sendSync("media-url", projectRelativePath);
   },

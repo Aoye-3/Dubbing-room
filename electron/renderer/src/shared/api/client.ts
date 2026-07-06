@@ -10,9 +10,28 @@ import type {
   SelectedAudioFile,
   ShellState,
   ShellStatus,
+  UpdateActionResult,
+  UpdateRequest,
+  UpdateStatus,
 } from "../types";
 
 const emptyList = <T>(): AppListResponse<T> => ({ items: [] });
+
+const unavailableUpdateStatus = (payload: UpdateRequest): UpdateStatus => ({
+  state: "blocked",
+  repositoryUrl: payload.repositoryUrl,
+  remoteUrl: "",
+  currentBranch: "",
+  targetBranch: payload.branch,
+  currentCommit: "",
+  upstreamCommit: "",
+  ahead: 0,
+  behind: 0,
+  dirtyTrackedFiles: [],
+  protectedPaths: [],
+  blockers: ["Update API unavailable."],
+  log: [],
+});
 
 function shell() {
   return window.voxcpmShell;
@@ -99,5 +118,35 @@ export const apiClient = {
 
   listGenerations(payload?: { include_deleted?: boolean }): Promise<AppListResponse<AppGeneration>> {
     return shell()?.listGenerations(payload) ?? Promise.resolve(emptyList<AppGeneration>());
+  },
+
+  getUpdateStatus(payload: UpdateRequest): Promise<UpdateStatus> {
+    return shell()?.getUpdateStatus(payload) ?? Promise.resolve(unavailableUpdateStatus(payload));
+  },
+
+  preflightUpdate(payload: UpdateRequest): Promise<UpdateStatus> {
+    return shell()?.preflightUpdate(payload) ?? Promise.resolve(unavailableUpdateStatus(payload));
+  },
+
+  fetchUpdate(payload: UpdateRequest): Promise<UpdateActionResult> {
+    return shell()?.fetchUpdate(payload) ?? Promise.resolve({
+      ok: false,
+      state: "failed",
+      summary: "Update API unavailable.",
+      status: unavailableUpdateStatus(payload),
+      log: [],
+      error: "Update API unavailable.",
+    });
+  },
+
+  applyUpdate(payload: UpdateRequest): Promise<UpdateActionResult> {
+    return shell()?.applyUpdate(payload) ?? Promise.resolve({
+      ok: false,
+      state: "failed",
+      summary: "Update API unavailable.",
+      status: unavailableUpdateStatus(payload),
+      log: [],
+      error: "Update API unavailable.",
+    });
   },
 };

@@ -8,6 +8,7 @@ export type PageKey =
   | "library"
   | "history"
   | "jobs"
+  | "updates"
   | "settings";
 
 export type LanguageCode = "en" | "zh";
@@ -193,4 +194,41 @@ export type IndexTTS2Payload = {
   use_accel: boolean;
   use_torch_compile: boolean;
   take_count?: number;
+};
+
+export type ProtectedPathCheck = {
+  path: string;
+  ignored: boolean;
+  exists: boolean;
+  classification: "user-data" | "local-runtime" | string;
+};
+
+export type UpdateStatus = {
+  state: "blocked" | "updateAvailable" | "upToDate" | "succeeded" | "failed" | string;
+  repositoryUrl: string;
+  remoteUrl: string;
+  currentBranch: string;
+  targetBranch: string;
+  currentCommit: string;
+  upstreamCommit: string;
+  ahead: number;
+  behind: number;
+  dirtyTrackedFiles: string[];
+  protectedPaths: ProtectedPathCheck[];
+  blockers: string[];
+  log: string[];
+};
+
+export type UpdateActionResult = {
+  ok: boolean;
+  state: string;
+  summary: string;
+  status: UpdateStatus;
+  log: string[];
+  error: string;
+};
+
+export type UpdateRequest = {
+  repositoryUrl: string;
+  branch: string;
 };

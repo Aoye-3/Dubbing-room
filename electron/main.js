@@ -4,6 +4,7 @@ const fs = require("fs");
 const http = require("http");
 const net = require("net");
 const path = require("path");
+const { applyUpdate, fetchUpdate, getUpdateStatus, preflightUpdate } = require("./update-manager");
 
 const projectDir = path.resolve(__dirname, "..");
 const backendHost = "127.0.0.1";
@@ -515,6 +516,29 @@ ipcMain.handle("list-generation-takes", (_event, payload) => {
 
 ipcMain.handle("select-generation-take", (_event, payload) => {
   return postAppBackendJson(`/generation-takes/${encodeURIComponent(payload.id)}/select`, {});
+});
+
+function updateOptions(payload) {
+  return {
+    repositoryUrl: typeof payload?.repositoryUrl === "string" ? payload.repositoryUrl : "",
+    branch: typeof payload?.branch === "string" ? payload.branch : "main",
+  };
+}
+
+ipcMain.handle("get-update-status", (_event, payload) => {
+  return getUpdateStatus(projectDir, updateOptions(payload));
+});
+
+ipcMain.handle("preflight-update", (_event, payload) => {
+  return preflightUpdate(projectDir, updateOptions(payload));
+});
+
+ipcMain.handle("fetch-update", (_event, payload) => {
+  return fetchUpdate(projectDir, updateOptions(payload));
+});
+
+ipcMain.handle("apply-update", (_event, payload) => {
+  return applyUpdate(projectDir, updateOptions(payload));
 });
 
 ipcMain.handle("select-audio-file", async () => {

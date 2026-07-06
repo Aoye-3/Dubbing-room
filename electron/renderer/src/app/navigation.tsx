@@ -1,5 +1,6 @@
 import {
   AudioWaveform,
+  DownloadCloud,
   FileAudio,
   History,
   Library,
@@ -28,5 +29,6 @@ export const navItems: NavItem[] = [
   { key: "library", labelKey: "navLibrary", icon: Library },
   { key: "history", labelKey: "navHistory", icon: History },
   { key: "jobs", labelKey: "navJobs", icon: RefreshCw },
+  { key: "updates", labelKey: "navUpdates", icon: DownloadCloud },
   { key: "settings", labelKey: "navSettings", icon: Settings },
 ];

@@ -12,6 +12,9 @@ import type {
   SelectedAudioFile,
   ShellState,
   ShellStatus,
+  UpdateActionResult,
+  UpdateRequest,
+  UpdateStatus,
 } from "./shared/types";
 
 declare global {
@@ -37,6 +40,10 @@ declare global {
       retryGenerationJob(payload: { id: string }): Promise<GenerationJob>;
       listGenerationTakes(payload: { job_id: string }): Promise<AppListResponse<GenerationTake>>;
       selectGenerationTake(payload: { id: string }): Promise<GenerationTake>;
+      getUpdateStatus(payload: UpdateRequest): Promise<UpdateStatus>;
+      preflightUpdate(payload: UpdateRequest): Promise<UpdateStatus>;
+      fetchUpdate(payload: UpdateRequest): Promise<UpdateActionResult>;
+      applyUpdate(payload: UpdateRequest): Promise<UpdateActionResult>;
       mediaUrl(projectRelativePath: string): string;
       listVoices(payload?: { include_deleted?: boolean }): Promise<AppListResponse<AppVoice>>;
       createVoice(payload: {

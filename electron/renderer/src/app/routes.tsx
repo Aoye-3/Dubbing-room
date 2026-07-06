@@ -5,6 +5,7 @@ import { IndexTTS2Page } from "../indextts2/IndexTTS2Page";
 import { apiClient } from "../shared/api/client";
 import { HistoryPage } from "../storage/HistoryPage";
 import { VoiceLibraryPage } from "../storage/VoiceLibraryPage";
+import { UpdatePage } from "../updates/UpdatePage";
 import { VoxCPMPage } from "../voxcpm/VoxCPMPage";
 import type { AppDataState, AppGeneration, AppVoice, FeatureMode, LanguageCode, PageKey, RuntimeBackendStatus, ShellState, ShellStatus } from "../shared/types";
 import type { MessageKey } from "./i18n";
@@ -65,6 +66,9 @@ export function AppRoutes({
   }
   if (activePage === "jobs") {
     return <JobListPage labels={{ jobs: t("navJobs"), retry: t("retry"), cancel: t("cancel"), noJobs: t("noJobs"), takes: t("takes"), selectTake: t("selectTake"), selected: t("selected"), saveVoice: t("saveVoice") }} />;
+  }
+  if (activePage === "updates") {
+    return <UpdatePage shellState={shellState} t={t} />;
   }
   return <SettingsPage status={status} shellState={shellState} language={language} setLanguage={setLanguage} t={t} />;
 }
