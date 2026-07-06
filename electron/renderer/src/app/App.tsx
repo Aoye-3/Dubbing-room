@@ -59,11 +59,13 @@ export function App() {
     }
   }, []);
 
-  useEffect(() => {
-    loadAppData();
-  }, [loadAppData]);
-
   const appReady = status.state === "ready";
+
+  useEffect(() => {
+    if (appReady) {
+      loadAppData();
+    }
+  }, [appReady, loadAppData]);
 
   return (
     <AppShell

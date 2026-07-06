@@ -141,8 +141,10 @@ function SettingsPage({
   }, []);
 
   useEffect(() => {
-    loadRuntimeBackends();
-  }, [loadRuntimeBackends]);
+    if (status.state === "ready") {
+      loadRuntimeBackends();
+    }
+  }, [loadRuntimeBackends, status.state]);
 
   return (
     <section className="settings-grid">

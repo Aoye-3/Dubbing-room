@@ -227,6 +227,8 @@ h1 {
   display: flex;
   flex-direction: column;
   gap: 22px;
+  min-height: 0;
+  overflow: hidden;
   padding: 22px;
 }
 
@@ -279,6 +281,15 @@ h1 {
   gap: 14px;
 }
 
+.mode-panel > .field-stack {
+  align-content: start;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-right: 12px;
+  scrollbar-gutter: stable;
+}
+
 .field-stack label {
   display: grid;
   gap: 7px;
@@ -310,10 +321,101 @@ h1 {
   min-height: 36px;
 }
 
+.checkbox-label-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .field-stack .checkbox-row input {
   width: 18px;
   min-height: 18px;
   accent-color: #227c7c;
+}
+
+.field-caption {
+  display: inline-flex;
+  position: relative;
+  align-items: center;
+  max-width: 100%;
+  gap: 6px;
+}
+
+.field-caption > span:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.help-badge {
+  display: inline-grid;
+  position: relative;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  color: #8a7a54;
+  vertical-align: middle;
+  cursor: help;
+}
+
+.help-badge:focus-visible {
+  outline: 2px solid #d4a944;
+  outline-offset: 2px;
+  border-radius: 50%;
+}
+
+.help-bubble {
+  display: block;
+  position: absolute;
+  z-index: 30;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  width: max-content;
+  max-width: 240px;
+  padding: 9px 10px;
+  color: #fffdfa;
+  background: #252622;
+  border: 1px solid rgba(255, 253, 250, 0.18);
+  border-radius: 6px;
+  box-shadow: 0 12px 26px rgba(30, 28, 22, 0.18);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.45;
+  opacity: 0;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+  transform: translate(-50%, 4px);
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+
+.help-bubble::after {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  content: "";
+  background: #252622;
+  transform: translate(-50%, -4px) rotate(45deg);
+}
+
+.help-badge:hover .help-bubble,
+.help-badge:focus-visible .help-bubble {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.mode-panel > .field-stack .help-bubble {
+  left: 0;
+  transform: translateY(4px);
+}
+
+.mode-panel > .field-stack .help-bubble::after {
+  left: 9px;
+}
+
+.mode-panel > .field-stack .help-badge:hover .help-bubble,
+.mode-panel > .field-stack .help-badge:focus-visible .help-bubble {
+  transform: translateY(0);
 }
 
 .native-workbench {
@@ -675,6 +777,14 @@ h1 {
 .inline-save {
   display: grid;
   gap: 10px;
+}
+
+.inline-save label {
+  display: grid;
+  gap: 7px;
+  color: #77736a;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .reference-stack p {

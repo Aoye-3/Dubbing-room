@@ -85,8 +85,10 @@ export function IndexTTS2Page({
   }, []);
 
   useEffect(() => {
-    loadRuntime();
-  }, [loadRuntime]);
+    if (appReady) {
+      loadRuntime();
+    }
+  }, [appReady, loadRuntime]);
 
   useEffect(() => {
     if (!selectedVoiceId && voices.length > 0) {

@@ -12,6 +12,24 @@ function pipeOutput(child) {
   child.stderr?.on("data", (chunk) => process.stderr.write(chunk));
 }
 
+function terminateProcessTree(child) {
+  if (!child || child.exitCode !== null || child.pid === undefined) {
+    return Promise.resolve();
+  }
+  if (process.platform !== "win32") {
+    child.kill();
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => {
+    const killer = spawn("taskkill.exe", ["/pid", String(child.pid), "/t", "/f"], {
+      stdio: "ignore",
+      windowsHide: true,
+    });
+    killer.on("exit", () => resolve());
+    killer.on("error", () => resolve());
+  });
+}
+
 function parsePortEnv(envName) {
   const value = process.env[envName];
   if (!value) {
@@ -111,15 +129,16 @@ async function main() {
     });
     pipeOutput(electron);
 
-    electron.on("exit", (code) => {
-      vite.kill();
+    electron.on("exit", async (code) => {
+      await terminateProcessTree(vite);
       process.exit(code ?? 0);
     });
   })
   .catch((error) => {
     console.error(error);
-    vite.kill();
-    process.exit(1);
+    terminateProcessTree(vite).finally(() => {
+      process.exit(1);
+    });
   });
 }
 
