@@ -15,6 +15,8 @@
 
 - [VoxCPM-Box AIGC 语音工作流配音室 PRD](PRD/aigc-voice-workflow-studio-prd.md)
 - [ADR-001: Local Dual-Model Voice Studio](decisions/ADR-001-local-dual-model-voice-studio.md)
+- [ADR-002: Safe GitHub Updates For Local AppShell](decisions/ADR-002-github-safe-local-updates.md)
+- [GitHub Safe Update Runbook](technical/github-safe-update-runbook.md)
 - [双模型音频生成应用壳完整功能实现 PRD](PRD/dual-model-audio-appshell-full-implementation-prd.md)
 - [系统架构](technical/architecture.md)
 - [模型与运行时](technical/models-runtime.md)
