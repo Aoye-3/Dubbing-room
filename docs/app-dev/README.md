@@ -61,6 +61,7 @@ Out of scope for the first implementation:
 - [Technical Documentation Index](../technical/README.md)
 - [ADR 0001: Local SQLite and File Storage](adr/0001-local-sqlite-and-file-storage.md)
 - [ADR 0002: 双模型 RuntimeCoordinator](adr/0002-dual-model-runtime-coordinator.md)
+- [ADR 0003: Hide promoted generation records from normal History](adr/0003-generation-history-voice-promotion.md)
 
 ## Default App Data Layout
 

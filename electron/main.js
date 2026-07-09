@@ -6,6 +6,7 @@ const net = require("net");
 const path = require("path");
 const { applyUpdate, fetchUpdate, getUpdateStatus, preflightUpdate } = require("./update-manager");
 
+const appName = "Dubbing-room";
 const projectDir = path.resolve(__dirname, "..");
 const backendHost = "127.0.0.1";
 const defaultMainPort = 8808;
@@ -32,13 +33,17 @@ const appServiceActions = new Set([
   "mark-generation-succeeded",
   "mark-generation-failed",
   "delete-generation",
+  "restore-generation",
+  "update-generation-favorite",
+  "purge-generations",
+  "promote-generation-to-voice",
 ]);
 
 let mainWindow = null;
 let legacyBackendProcess = null;
 let appBackendProcess = null;
 let isQuitting = false;
-let lastStatus = { state: "starting", message: "Starting VoxCPM AppShell", detail: "" };
+let lastStatus = { state: "starting", message: `Starting ${appName} AppShell`, detail: "" };
 
 function localUrl(port) {
   return `http://${backendHost}:${port}`;
@@ -179,7 +184,7 @@ function startBackend() {
   const outLog = fs.openSync(outLogPath, "a");
   const errLog = fs.openSync(errLogPath, "a");
 
-  sendStatus("starting", "Starting VoxCPM backend", `${py} ${args.join(" ")}`);
+  sendStatus("starting", `Starting ${appName} legacy backend`, `${py} ${args.join(" ")}`);
   legacyBackendProcess = spawn(py, args, {
     cwd: projectDir,
     windowsHide: true,
@@ -218,7 +223,7 @@ function startAppBackend() {
   const outLog = fs.openSync(appBackendOutLogPath, "a");
   const errLog = fs.openSync(appBackendErrLogPath, "a");
 
-  sendStatus("starting", "Starting VoxCPM App backend", `${py} ${args.join(" ")}`);
+  sendStatus("starting", `Starting ${appName} app backend`, `${py} ${args.join(" ")}`);
   appBackendProcess = spawn(py, args, {
     cwd: projectDir,
     windowsHide: true,
@@ -396,7 +401,7 @@ async function stopBackend() {
 
 async function bootWebUI() {
   startBackend();
-  sendStatus("starting", "Starting VoxCPM backend", mainUrl);
+  sendStatus("starting", `Starting ${appName} legacy backend`, mainUrl);
 
   const ready = await waitForBackend(mainUrl, () => legacyBackendProcess);
   if (!ready) {
@@ -404,12 +409,12 @@ async function bootWebUI() {
     return;
   }
 
-  sendStatus("ready", "VoxCPM WebUI is ready", mainUrl);
+  sendStatus("ready", `${appName} legacy WebUI is ready`, mainUrl);
 }
 
 async function bootAppBackend() {
   startAppBackend();
-  sendStatus("starting", "Starting VoxCPM App backend", appBackendUrl);
+  sendStatus("starting", `Starting ${appName} app backend`, appBackendUrl);
 
   const ready = await waitForBackend(`${appBackendUrl}/health`, () => appBackendProcess);
   if (!ready) {
@@ -417,7 +422,7 @@ async function bootAppBackend() {
     return;
   }
 
-  sendStatus("ready", "VoxCPM AppShell is ready", appBackendUrl);
+  sendStatus("ready", `${appName} AppShell is ready`, appBackendUrl);
 }
 
 function createWindow() {
@@ -426,7 +431,7 @@ function createWindow() {
     height: 960,
     minWidth: 1120,
     minHeight: 760,
-    title: "VoxCPM",
+    title: appName,
     backgroundColor: "#101214",
     show: false,
     webPreferences: {
@@ -560,7 +565,39 @@ ipcMain.handle("select-audio-file", async () => {
   };
 });
 
+ipcMain.handle("export-audio-file", async (_event, payload) => {
+  const relativePath = typeof payload?.project_relative_path === "string" ? payload.project_relative_path : "";
+  if (!relativePath) {
+    throw new Error("project_relative_path is required");
+  }
+  const root = path.resolve(projectDir);
+  const sourcePath = path.resolve(root, relativePath);
+  if (sourcePath !== root && !sourcePath.startsWith(`${root}${path.sep}`)) {
+    throw new Error("audio path is outside project");
+  }
+  if (!fs.existsSync(sourcePath) || !fs.statSync(sourcePath).isFile()) {
+    throw new Error("audio file not found");
+  }
+  const suggestedName = typeof payload?.suggested_name === "string" && payload.suggested_name.trim()
+    ? payload.suggested_name.trim()
+    : path.basename(sourcePath);
+  const result = await dialog.showSaveDialog(mainWindow, {
+    title: "Export audio",
+    defaultPath: suggestedName,
+    filters: [
+      { name: "Audio", extensions: [path.extname(sourcePath).replace(".", "") || "wav"] },
+      { name: "All Files", extensions: ["*"] },
+    ],
+  });
+  if (result.canceled || !result.filePath) {
+    return { ok: false, canceled: true, path: "" };
+  }
+  fs.copyFileSync(sourcePath, result.filePath);
+  return { ok: true, canceled: false, path: result.filePath };
+});
+
 app.whenReady().then(async () => {
+  app.setName(appName);
   await configureBackendPorts();
   createWindow();
   if (shouldStartLegacyWebUI) {
@@ -575,7 +612,7 @@ app.whenReady().then(async () => {
 }).catch((error) => {
   const detail = error.stack || String(error);
   sendStatus("failed", "Startup error", detail);
-  dialog.showErrorBox("VoxCPM startup failed", detail);
+  dialog.showErrorBox(`${appName} startup failed`, detail);
   app.quit();
 });
 

@@ -370,6 +370,11 @@ h1 {
   border: 1px solid #ddd9cf;
 }
 
+.ghost-action.danger {
+  color: #8d312d;
+  border-color: #efc5be;
+}
+
 .field-stack {
   display: grid;
   gap: 14px;
@@ -803,8 +808,14 @@ h1 {
 
 .audio-result audio,
 .voice-card audio,
+.history-output audio,
 .history-actions audio {
   width: 100%;
+}
+
+.result-actions {
+  display: flex;
+  justify-content: flex-start;
 }
 
 .status-line {
@@ -1083,13 +1094,50 @@ h1 {
   overflow: auto;
 }
 
+.history-toolbar {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  background: #fffdfa;
+  border: 1px solid #dcd9d0;
+  border-radius: 8px;
+}
+
+.history-tabs {
+  max-width: 360px;
+}
+
+.filter-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.filter-row label {
+  display: grid;
+  gap: 6px;
+  color: #686964;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.filter-row select {
+  min-width: 0;
+}
+
 .history-row {
   display: grid;
-  grid-template-columns: 42px minmax(180px, 260px) minmax(260px, 1fr) minmax(180px, 240px);
+  grid-template-columns: 42px minmax(160px, 220px) minmax(240px, 1fr) minmax(220px, 300px) minmax(130px, auto);
   align-items: center;
   gap: 16px;
   min-height: 114px;
   padding: 16px 18px;
+}
+
+.history-row > input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  justify-self: center;
 }
 
 .wave-icon {
@@ -1123,6 +1171,18 @@ h1 {
 
 .history-text p {
   margin: 0;
+}
+
+.history-output {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.history-output span {
+  color: #70726d;
+  font-size: 12px;
+  overflow-wrap: anywhere;
 }
 
 .job-row {

@@ -18,6 +18,8 @@ def sha256_file(path: str | Path) -> str:
 
 def copy_voice_audio(paths: AppPaths, source_audio_path: str | Path, voice_id: str) -> tuple[str, str]:
     source = Path(source_audio_path)
+    if not source.is_absolute():
+        source = paths.project_root / source
     if not source.exists():
         raise FileNotFoundError(f"source audio does not exist: {source}")
     extension = source.suffix.lower() or ".wav"
@@ -29,6 +31,8 @@ def copy_voice_audio(paths: AppPaths, source_audio_path: str | Path, voice_id: s
 
 def copy_generation_audio(paths: AppPaths, source_output_audio_path: str | Path, generation_id: str) -> str:
     source = Path(source_output_audio_path)
+    if not source.is_absolute():
+        source = paths.project_root / source
     if not source.exists():
         raise FileNotFoundError(f"source output audio does not exist: {source}")
     destination = paths.generations_dir / f"{generation_id}.wav"

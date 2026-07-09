@@ -18,6 +18,7 @@ class VoiceRecord:
     source: str
     audio_path: str
     audio_sha256: str
+    source_generation_id: str | None
     duration_seconds: float | None
     created_at: str
     updated_at: str
@@ -40,10 +41,17 @@ class GenerationRecord:
     inference_timesteps: int
     normalize: bool
     denoise: bool
+    source_backend: str
+    source_mode: str
+    description: str
+    is_favorite: bool
     output_audio_path: str | None
     sample_rate: int | None
     status: str
     error_summary: str
+    saved_voice_id: str | None
+    promoted_to_voice_at: str | None
+    hidden_from_history_at: str | None
     created_at: str
     updated_at: str
     deleted_at: str | None

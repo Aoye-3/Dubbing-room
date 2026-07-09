@@ -52,6 +52,7 @@ declare global {
         tags?: string[];
         notes?: string;
         source?: string;
+        source_generation_id?: string | null;
         duration_seconds?: number | null;
       }): Promise<AppVoice>;
       updateVoice(payload: { id: string; display_name: string; tags: string[]; notes: string }): Promise<AppVoice>;
@@ -76,6 +77,19 @@ declare global {
       }): Promise<AppGeneration>;
       markGenerationFailed(payload: { id: string; error_summary?: string }): Promise<AppGeneration>;
       deleteGeneration(payload: { id: string }): Promise<AppGeneration>;
+      restoreGeneration(payload: { id: string }): Promise<AppGeneration>;
+      updateGenerationFavorite(payload: { id: string; is_favorite: boolean }): Promise<AppGeneration>;
+      purgeGenerations(payload: { ids: string[] }): Promise<{ purged: string[] }>;
+      promoteGenerationToVoice(payload: {
+        generation_id: string;
+        display_name: string;
+        tags?: string[];
+        notes?: string;
+      }): Promise<{ voice: AppVoice; generation: AppGeneration }>;
+      exportAudioFile(payload: {
+        project_relative_path: string;
+        suggested_name?: string;
+      }): Promise<{ ok: boolean; canceled: boolean; path: string }>;
     };
   }
 }

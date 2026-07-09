@@ -197,6 +197,9 @@ class GenerationService:
             inference_timesteps=int(payload.get("inference_timesteps", 10)),
             normalize=bool(payload.get("normalize", False)),
             denoise=bool(payload.get("denoise", False)),
+            source_backend="voxcpm2",
+            source_mode=str(payload.get("source_mode") or "voice-design"),
+            description=str(payload.get("description") or payload.get("control_instruction") or input_text),
         )
         mark_generation_running(self.paths, generation.id)
 

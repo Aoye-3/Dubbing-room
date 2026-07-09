@@ -1,8 +1,9 @@
-import { FileAudio, Library, Play, RefreshCw, SlidersHorizontal, Sparkles, Upload } from "lucide-react";
+import { Library, RefreshCw, SlidersHorizontal, Sparkles, Upload } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { apiClient } from "../shared/api/client";
-import { mediaUrl } from "../shared/audio";
+import { GenerationResultPanel } from "../shared/GenerationResultPanel";
 import { LoadingPanel } from "../shared/components";
+import { useGenerationAudioExport } from "../shared/useGenerationAudioExport";
 import type { AppGeneration, AppVoice, IndexTTS2EmotionMode, IndexTTS2Payload, RuntimeBackendStatus, SelectedAudioFile, ShellStatus } from "../shared/types";
 import type { MessageKey } from "../app/i18n";
 const emotionVectorFields = ["happy", "angry", "sad", "afraid", "disgusted", "melancholic", "surprised", "calm"] as const;
@@ -58,9 +59,13 @@ export function IndexTTS2Page({
   const [useAccel, setUseAccel] = useState(false);
   const [useTorchCompile, setUseTorchCompile] = useState(false);
   const [generatedRecord, setGeneratedRecord] = useState<AppGeneration | null>(null);
+  const [generatedVoiceName, setGeneratedVoiceName] = useState(t("generatedVoiceName"));
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const runtimeUnavailable = runtime ? !runtime.configured || runtime.busy : false;
+  const generationAudioExport = useGenerationAudioExport(generatedRecord, t);
   const emotionVectorTotal = emotionVectorFields.reduce((sum, field) => sum + emotionVector[field], 0);
   const vectorTooHigh = emotionMode === "vector" && emotionVectorTotal > 0.8;
   const missingEmotionAudio = emotionMode === "audio_prompt" && !emotionFile;
@@ -122,6 +127,7 @@ export function IndexTTS2Page({
   };
 
   const generate = async () => {
+    setMessage("");
     setError("");
     const speaker = buildIndexSpeakerPayload(speakerKind, selectedVoiceId, speakerFile);
     if (!speaker) {
@@ -185,6 +191,7 @@ export function IndexTTS2Page({
   };
 
   const submitJob = async () => {
+    setMessage("");
     setError("");
     const speaker = buildIndexSpeakerPayload(speakerKind, selectedVoiceId, speakerFile);
     if (!speaker) {
@@ -249,6 +256,30 @@ export function IndexTTS2Page({
       setError(submitError instanceof Error ? submitError.message : String(submitError));
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  const saveGeneratedVoice = async () => {
+    if (!generatedRecord?.output_audio_path || !generatedVoiceName.trim()) {
+      return;
+    }
+    setIsSaving(true);
+    setError("");
+    try {
+      const result = await apiClient.promoteGenerationToVoice({
+        generation_id: generatedRecord.id,
+        display_name: generatedVoiceName.trim(),
+        tags: ["generated", "indextts2"],
+      });
+      if (result?.generation) {
+        setGeneratedRecord(result.generation);
+      }
+      setMessage(t("saveSuccess"));
+      await reload();
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : String(saveError));
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -406,29 +437,23 @@ export function IndexTTS2Page({
               )}
             </div>
 
-            <aside className="result-panel">
-              <div className="result-header">
-                <FileAudio size={20} />
-                <h2>{t("generationOutput")}</h2>
-              </div>
-              {generatedRecord?.output_audio_path ? (
-                <div className="audio-result">
-                  <audio controls src={mediaUrl(generatedRecord.output_audio_path)} />
-                  <dl className="adapter-summary">
-                    <dt>{t("status")}</dt>
-                    <dd>{generatedRecord.status}</dd>
-                    <dt>{t("sampleRate")}</dt>
-                    <dd>{generatedRecord.sample_rate ? `${generatedRecord.sample_rate} Hz` : "--"}</dd>
-                  </dl>
-                </div>
-              ) : (
-                <div className="audio-placeholder">
-                  <Play size={22} />
-                  <span>{generatedRecord?.status === "failed" ? generatedRecord.error_summary : t("noGeneration")}</span>
-                </div>
-              )}
-              {error && <p className="status-line error">{error}</p>}
-            </aside>
+            <GenerationResultPanel
+              record={generatedRecord}
+              sourceLabel={t("navIndexTTS2")}
+              description={generatedRecord?.description || emotionMode}
+              voiceName={generatedVoiceName}
+              isSaving={isSaving}
+              message={message}
+              error={error}
+              onVoiceNameChange={setGeneratedVoiceName}
+              onSaveVoice={saveGeneratedVoice}
+              onExportAudio={generationAudioExport.exportAudio}
+              exportMessage={generationAudioExport.exportMessage}
+              exportError={generationAudioExport.exportError}
+              canExport={generationAudioExport.canExport}
+              canSaveVoice={Boolean(generatedRecord?.output_audio_path)}
+              t={t}
+            />
           </>
         )}
       </div>

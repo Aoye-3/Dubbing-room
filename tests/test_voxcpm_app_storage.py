@@ -16,6 +16,10 @@ from voxcpm_app.generation_history import (
     mark_generation_failed,
     mark_generation_running,
     mark_generation_succeeded,
+    promote_generation_to_voice,
+    purge_generations,
+    restore_generation,
+    update_generation_favorite,
 )
 from voxcpm_app.job_store import (
     create_asset,
@@ -50,7 +54,7 @@ def test_database_initialization_is_idempotent(tmp_path: Path):
             )
         }
 
-    assert versions == [(1,), (2,), (3,)]
+    assert versions == [(1,), (2,), (3,), (4,)]
     assert tables == {"voices", "generations", "assets", "generation_jobs", "generation_takes"}
     assert paths.voices_dir.exists()
     assert paths.generations_dir.exists()
@@ -109,10 +113,22 @@ def test_v1_database_is_additively_migrated_to_v2(tmp_path: Path):
             "select name from sqlite_master where type = 'table' and name = 'generation_jobs'"
         ).fetchone()
         take_columns = {row[1] for row in conn.execute("pragma table_info(generation_takes)")}
+        voice_columns = {row[1] for row in conn.execute("pragma table_info(voices)")}
+        generation_columns = {row[1] for row in conn.execute("pragma table_info(generations)")}
 
-    assert versions == [(1,), (2,), (3,)]
+    assert versions == [(1,), (2,), (3,), (4,)]
     assert job_table == ("generation_jobs",)
     assert "legacy_generation_id" in take_columns
+    assert "source_generation_id" in voice_columns
+    assert {
+        "source_backend",
+        "source_mode",
+        "description",
+        "is_favorite",
+        "saved_voice_id",
+        "promoted_to_voice_at",
+        "hidden_from_history_at",
+    }.issubset(generation_columns)
 
 
 def test_voice_lifecycle_copies_audio_and_hides_soft_deleted_records(tmp_path: Path):
@@ -127,6 +143,7 @@ def test_voice_lifecycle_copies_audio_and_hides_soft_deleted_records(tmp_path: P
         tags=["en", "narration"],
         notes="Clean delivery",
         source="upload",
+        source_generation_id=None,
         duration_seconds=1.25,
     )
 
@@ -134,6 +151,7 @@ def test_voice_lifecycle_copies_audio_and_hides_soft_deleted_records(tmp_path: P
     assert voice.display_name == "Studio Narrator"
     assert voice.tags == ["en", "narration"]
     assert voice.audio_path == f"data/app/voices/{voice.id}.wav"
+    assert voice.source_generation_id is None
     assert stored_path.read_bytes() == b"voice-bytes"
     assert voice.audio_sha256 == hashlib.sha256(b"voice-bytes").hexdigest()
 
@@ -168,8 +186,15 @@ def test_generation_lifecycle_copies_output_and_hides_soft_deleted_records(tmp_p
         inference_timesteps=10,
         normalize=False,
         denoise=True,
+        source_backend="voxcpm2",
+        source_mode="voice-design",
+        description="warm voice",
     )
     assert generation.status == "pending"
+    assert generation.source_backend == "voxcpm2"
+    assert generation.source_mode == "voice-design"
+    assert generation.description == "warm voice"
+    assert generation.is_favorite is False
 
     running = mark_generation_running(paths, generation.id)
     assert running.status == "running"
@@ -213,6 +238,104 @@ def test_generation_lifecycle_copies_output_and_hides_soft_deleted_records(tmp_p
         failed.id,
         generation.id,
     }
+
+
+def test_generation_favorite_trash_restore_and_purge(tmp_path: Path):
+    paths = AppPaths.from_project_root(tmp_path)
+    generation = create_generation(
+        paths,
+        input_text="Keep me",
+        control_instruction="bright",
+        voice_id=None,
+        reference_audio_path=None,
+        prompt_text="",
+        cfg_value=2.0,
+        inference_timesteps=10,
+        normalize=False,
+        denoise=False,
+    )
+    output_audio = tmp_path / "result.wav"
+    output_audio.write_bytes(b"generated-audio")
+    generation = mark_generation_succeeded(paths, generation.id, source_output_audio_path=output_audio, sample_rate=24000)
+
+    favorite = update_generation_favorite(paths, generation.id, is_favorite=True)
+    assert favorite.is_favorite is True
+    assert favorite.deleted_at is None
+
+    trashed = delete_generation(paths, generation.id)
+    assert trashed.deleted_at is not None
+    assert list_generations(paths) == []
+    assert [item.id for item in list_generations(paths, deleted_only=True)] == [generation.id]
+
+    restored = restore_generation(paths, generation.id)
+    assert restored.deleted_at is None
+    assert restored.status == "succeeded"
+
+    delete_generation(paths, generation.id)
+    purged = purge_generations(paths, [generation.id])
+    assert purged == {"purged": [generation.id]}
+    assert list_generations(paths, include_deleted=True) == []
+    assert not (tmp_path / f"data/app/generations/{generation.id}.wav").exists()
+
+
+def test_purge_rejects_non_trashed_generations(tmp_path: Path):
+    paths = AppPaths.from_project_root(tmp_path)
+    generation = create_generation(
+        paths,
+        input_text="Not trashed",
+        control_instruction="",
+        voice_id=None,
+        reference_audio_path=None,
+        prompt_text="",
+        cfg_value=2.0,
+        inference_timesteps=10,
+        normalize=False,
+        denoise=False,
+    )
+
+    try:
+        purge_generations(paths, [generation.id])
+    except ValueError as exc:
+        assert "only trashed generations" in str(exc)
+    else:
+        raise AssertionError("expected purge to reject non-trashed generation")
+
+
+def test_promote_generation_to_voice_hides_history_and_links_records(tmp_path: Path):
+    paths = AppPaths.from_project_root(tmp_path)
+    generation = create_generation(
+        paths,
+        input_text="Promote me",
+        control_instruction="calm",
+        voice_id=None,
+        reference_audio_path=None,
+        prompt_text="",
+        cfg_value=2.0,
+        inference_timesteps=10,
+        normalize=False,
+        denoise=False,
+    )
+    output_audio = tmp_path / "result.wav"
+    output_audio.write_bytes(b"voice-bytes")
+    generation = mark_generation_succeeded(paths, generation.id, source_output_audio_path=output_audio, sample_rate=48000)
+
+    result = promote_generation_to_voice(
+        paths,
+        generation.id,
+        display_name="Generated Voice",
+        tags=["generated"],
+        notes="From history",
+    )
+    voice = result["voice"]
+    updated = result["generation"]
+
+    assert voice["source_generation_id"] == generation.id
+    assert updated["saved_voice_id"] == voice["id"]
+    assert updated["promoted_to_voice_at"] is not None
+    assert updated["hidden_from_history_at"] is not None
+    assert list_generations(paths) == []
+    assert [item.id for item in list_generations(paths, include_hidden=True)] == [generation.id]
+    assert (tmp_path / voice["audio_path"]).read_bytes() == b"voice-bytes"
 
 
 def test_asset_job_and_take_lifecycle(tmp_path: Path):

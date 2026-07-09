@@ -111,13 +111,55 @@ export const apiClient = {
     tags?: string[];
     notes?: string;
     source?: string;
+    source_generation_id?: string | null;
     duration_seconds?: number | null;
   }): Promise<AppVoice | undefined> {
     return shell()?.createVoice(payload) ?? Promise.resolve(undefined);
   },
 
-  listGenerations(payload?: { include_deleted?: boolean }): Promise<AppListResponse<AppGeneration>> {
+  updateVoice(payload: { id: string; display_name: string; tags: string[]; notes: string }): Promise<AppVoice | undefined> {
+    return shell()?.updateVoice(payload) ?? Promise.resolve(undefined);
+  },
+
+  deleteVoice(payload: { id: string }): Promise<AppVoice | undefined> {
+    return shell()?.deleteVoice(payload) ?? Promise.resolve(undefined);
+  },
+
+  listGenerations(payload?: { include_deleted?: boolean; deleted_only?: boolean; include_hidden?: boolean }): Promise<AppListResponse<AppGeneration>> {
     return shell()?.listGenerations(payload) ?? Promise.resolve(emptyList<AppGeneration>());
+  },
+
+  deleteGeneration(payload: { id: string }): Promise<AppGeneration | undefined> {
+    return shell()?.deleteGeneration(payload) ?? Promise.resolve(undefined);
+  },
+
+  trashGeneration(payload: { id: string }): Promise<AppGeneration | undefined> {
+    return shell()?.deleteGeneration(payload) ?? Promise.resolve(undefined);
+  },
+
+  restoreGeneration(payload: { id: string }): Promise<AppGeneration | undefined> {
+    return shell()?.restoreGeneration(payload) ?? Promise.resolve(undefined);
+  },
+
+  updateGenerationFavorite(payload: { id: string; is_favorite: boolean }): Promise<AppGeneration | undefined> {
+    return shell()?.updateGenerationFavorite(payload) ?? Promise.resolve(undefined);
+  },
+
+  purgeGenerations(payload: { ids: string[] }): Promise<{ purged: string[] }> {
+    return shell()?.purgeGenerations(payload) ?? Promise.resolve({ purged: [] });
+  },
+
+  promoteGenerationToVoice(payload: {
+    generation_id: string;
+    display_name: string;
+    tags?: string[];
+    notes?: string;
+  }): Promise<{ voice: AppVoice; generation: AppGeneration } | undefined> {
+    return shell()?.promoteGenerationToVoice(payload) ?? Promise.resolve(undefined);
+  },
+
+  exportAudioFile(payload: { project_relative_path: string; suggested_name?: string }): Promise<{ ok: boolean; canceled: boolean; path: string }> {
+    return shell()?.exportAudioFile(payload) ?? Promise.resolve({ ok: false, canceled: true, path: "" });
   },
 
   getUpdateStatus(payload: UpdateRequest): Promise<UpdateStatus> {

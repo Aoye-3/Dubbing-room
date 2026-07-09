@@ -1,8 +1,8 @@
 {
-  "name": "voxcpm-electron-shell",
+  "name": "dubbing-room",
   "version": "0.1.0",
   "private": true,
-  "description": "Electron React AppShell for VoxCPM app mode",
+  "description": "Electron React AppShell for Dubbing-room",
   "main": "electron/main.js",
   "scripts": {
     "dev": "node electron/dev-runner.js",

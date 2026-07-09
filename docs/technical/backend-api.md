@@ -183,3 +183,83 @@ sync route -> create job -> run immediately -> return legacy GenerationRecord
 - Electron main 对超时和非 2xx 有清晰错误。
 
 - Phase 3 API status (2026-07-02): `generation-jobs` create/list/get/cancel/retry, `generation-jobs/:job_id/takes`, and `generation-takes/:take_id/select` are implemented. Take list responses include `output_asset` for playback. IndexTTS2 queued jobs support `params.take_count` clamped to 1-5 with default 3. Appending takes after job creation, hard cancellation, and real runtime load/free/unload remain deferred.
+
+## Phase 4 history and voice-linkage API status (2026-07-06)
+
+The AppShell still uses the compatibility `/app-service` route for local storage actions. Electron preload exposes these actions to the renderer through `window.voxcpmShell`, and `electron/renderer/src/shared/api/client.ts` wraps them.
+
+New or expanded app-service actions:
+
+```text
+list-generations
+delete-generation
+restore-generation
+update-generation-favorite
+purge-generations
+promote-generation-to-voice
+```
+
+`list-generations` payload:
+
+```json
+{
+  "include_deleted": false,
+  "deleted_only": false,
+  "include_hidden": false
+}
+```
+
+Default behavior returns normal History records only: not deleted and not promoted/hidden.
+
+`delete-generation` is a soft delete used by "Move to Trash". It sets `status: "deleted"` and `deleted_at`.
+
+`restore-generation` clears `deleted_at` and restores a best-effort status based on the existing output/error fields.
+
+`update-generation-favorite` payload:
+
+```json
+{
+  "id": "generation-id",
+  "is_favorite": true
+}
+```
+
+`purge-generations` payload:
+
+```json
+{
+  "ids": ["generation-id"]
+}
+```
+
+Permanent purge rejects records that are not already in Trash. Successful purge removes the SQLite row and the generation output file, but it must not remove copied voice files.
+
+`promote-generation-to-voice` payload:
+
+```json
+{
+  "generation_id": "generation-id",
+  "display_name": "Generated Voice",
+  "tags": ["generated"],
+  "notes": ""
+}
+```
+
+Response:
+
+```json
+{
+  "voice": {},
+  "generation": {}
+}
+```
+
+The operation copies the generation output into `data/app/voices/`, creates a voice with `source_generation_id`, and updates the generation with `saved_voice_id`, `promoted_to_voice_at`, and `hidden_from_history_at`.
+
+Electron-only export API:
+
+```text
+exportAudioFile({ project_relative_path, suggested_name })
+```
+
+This uses `dialog.showSaveDialog` and validates that `project_relative_path` resolves inside the current project before copying the file.

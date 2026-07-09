@@ -282,4 +282,7 @@ def _create_selected_take_generation(
         inference_timesteps=int(params.get("max_text_tokens_per_segment", 120)),
         normalize=False,
         denoise=False,
+        source_backend=job.backend_id,
+        source_mode="indextts2-performance",
+        description=f"{take.label or 'Take'} / {job.mode}",
     )

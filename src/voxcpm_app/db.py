@@ -30,6 +30,7 @@ def initialize_database(paths: AppPaths) -> sqlite3.Connection:
             source text not null default 'upload',
             audio_path text not null,
             audio_sha256 text not null,
+            source_generation_id text,
             duration_seconds real,
             created_at text not null,
             updated_at text not null,
@@ -48,10 +49,17 @@ def initialize_database(paths: AppPaths) -> sqlite3.Connection:
             inference_timesteps integer not null,
             normalize integer not null,
             denoise integer not null,
+            source_backend text not null default 'voxcpm2',
+            source_mode text not null default 'legacy',
+            description text not null default '',
+            is_favorite integer not null default 0,
             output_audio_path text,
             sample_rate integer,
             status text not null,
             error_summary text not null default '',
+            saved_voice_id text,
+            promoted_to_voice_at text,
+            hidden_from_history_at text,
             created_at text not null,
             updated_at text not null,
             deleted_at text
@@ -130,6 +138,20 @@ def initialize_database(paths: AppPaths) -> sqlite3.Connection:
     conn.execute(
         "insert or ignore into schema_version(version, applied_at) values (?, ?)",
         (3, utc_now()),
+    )
+    _add_column_if_missing(conn, "voices", "source_generation_id", "text")
+    _add_column_if_missing(conn, "generations", "source_backend", "text not null default 'voxcpm2'")
+    _add_column_if_missing(conn, "generations", "source_mode", "text not null default 'legacy'")
+    _add_column_if_missing(conn, "generations", "description", "text not null default ''")
+    _add_column_if_missing(conn, "generations", "is_favorite", "integer not null default 0")
+    _add_column_if_missing(conn, "generations", "saved_voice_id", "text")
+    _add_column_if_missing(conn, "generations", "promoted_to_voice_at", "text")
+    _add_column_if_missing(conn, "generations", "hidden_from_history_at", "text")
+    conn.execute("create index if not exists idx_generations_hidden_from_history_at on generations(hidden_from_history_at)")
+    conn.execute("create index if not exists idx_generations_source_mode on generations(source_mode)")
+    conn.execute(
+        "insert or ignore into schema_version(version, applied_at) values (?, ?)",
+        (4, utc_now()),
     )
     conn.commit()
     return conn

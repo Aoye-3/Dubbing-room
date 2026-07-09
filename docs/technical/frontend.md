@@ -177,3 +177,63 @@ electron/renderer/src/shared/api/types.ts
 - `main.tsx` 不再承载新增复杂面板。
 - runtime missing / busy / failed 均有可读 UI。
 
+
+## Phase 4 production result and History UI status (2026-07-06)
+
+AppShell branding:
+
+- The desktop shell product name is `Dubbing-room`.
+- Window titles, renderer document titles, loading shell text, npm package name, and user-facing AppShell status text use `Dubbing-room`.
+- `VoxCPM`, `VoxCPM2`, `voxcpm_app`, `voxcpmShell`, `VOXCPM_*` environment variables, log filenames, and model IDs remain model/backend integration names and should not be renamed as part of product branding.
+
+Production result panels now share `electron/renderer/src/shared/GenerationResultPanel.tsx`.
+
+`GenerationResultPanel` is intentionally a presentation component. It renders result metadata, playback, export and save controls, then calls callbacks supplied by the owning page. It must not import `apiClient`, call `exportAudioFile`, call `promoteGenerationToVoice`, or branch on module-specific `source_mode` values.
+
+Export side effects are owned by `electron/renderer/src/shared/useGenerationAudioExport.ts`. `VoxCPMPage` and `IndexTTS2Page` each instantiate this hook with their own local generated record, so export messages and errors remain scoped to the current module page instance.
+
+The panel displays:
+
+- Source
+- Description
+- Audio playback
+- File location
+- Export action
+- Save generated audio as a Voice Library entry
+
+Module result isolation:
+
+- `design`, `clone`, and `ultimate` still reuse `VoxCPMPage`, but routes pass distinct React `key` values so their local result state does not bleed across modes.
+- `IndexTTS2Page` uses the same shared result panel and supports saving the latest generated output as a voice.
+- `GenerateAudioPayload.source_mode` is written by the renderer as one of `voice-design`, `voice-cloning`, or `ultimate-cloning`.
+- IndexTTS2 writes `source_mode: "indextts2-performance"` from the backend.
+
+History page behavior:
+
+- `HistoryPage` has internal `History` and `Trash` subviews.
+- Normal History receives `generations` from `App.tsx`, which calls `listGenerations()` with default filtering.
+- Trash loads its own data with `listGenerations({ deleted_only: true })`.
+- Filters are local UI state: source, favorite/star state, and status.
+- Star/unstar calls `updateGenerationFavorite`.
+- Move to Trash calls `trashGeneration`, which maps to the soft-delete app-service action.
+- Trash supports selecting the current filtered rows and permanently deleting only selected visible trashed records.
+
+Voice promotion behavior:
+
+- Save-generated-voice calls `promoteGenerationToVoice`, not raw `createVoice`.
+- After successful promotion, the returned generation is hidden from normal History by the backend.
+- The voice library owns its copied audio file, so History purge does not affect promoted voices.
+
+Export behavior:
+
+- `GenerationResultPanel` triggers the `onExportAudio` callback supplied by its page/container.
+- `VoxCPMPage` and `IndexTTS2Page` use `useGenerationAudioExport` to call `exportAudioFile`.
+- History rows call `exportAudioFile` directly from `HistoryPage`.
+- Export is implemented in Electron main because it requires a native save dialog and filesystem copy.
+- The renderer passes only project-relative audio paths.
+
+Result panel boundary rules:
+
+- Shared UI is allowed: source, description, playback, file path, export button, and save-as-voice controls.
+- Shared business logic is not allowed in the panel: generation, promotion-to-voice, export implementation, reference selection, and module-specific validation stay in the owning page.
+- Future modules that need different result actions should pass different callbacks or action slots before adding conditional module branches to `GenerationResultPanel`.

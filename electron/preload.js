@@ -85,4 +85,19 @@ contextBridge.exposeInMainWorld("voxcpmShell", {
   deleteGeneration(payload) {
     return ipcRenderer.invoke("app-service", { action: "delete-generation", payload });
   },
+  restoreGeneration(payload) {
+    return ipcRenderer.invoke("app-service", { action: "restore-generation", payload });
+  },
+  updateGenerationFavorite(payload) {
+    return ipcRenderer.invoke("app-service", { action: "update-generation-favorite", payload });
+  },
+  purgeGenerations(payload) {
+    return ipcRenderer.invoke("app-service", { action: "purge-generations", payload });
+  },
+  promoteGenerationToVoice(payload) {
+    return ipcRenderer.invoke("app-service", { action: "promote-generation-to-voice", payload });
+  },
+  exportAudioFile(payload) {
+    return ipcRenderer.invoke("export-audio-file", payload);
+  },
 });

@@ -41,13 +41,13 @@ export function AppRoutes({
   t,
 }: AppRoutesProps) {
   if (activePage === "design") {
-    return <VoxCPMPage mode={t("navDesign")} status={status} appReady={appReady} accent="design" modeKey="voice-design" description={t("designDescription")} voices={voices} reload={reload} t={t} />;
+    return <VoxCPMPage key="voice-design" mode={t("navDesign")} status={status} appReady={appReady} accent="design" modeKey="voice-design" description={t("designDescription")} voices={voices} reload={reload} t={t} />;
   }
   if (activePage === "clone") {
-    return <VoxCPMPage mode={t("navClone")} status={status} appReady={appReady} accent="clone" modeKey="voice-cloning" description={t("cloneDescription")} voices={voices} reload={reload} t={t} />;
+    return <VoxCPMPage key="voice-cloning" mode={t("navClone")} status={status} appReady={appReady} accent="clone" modeKey="voice-cloning" description={t("cloneDescription")} voices={voices} reload={reload} t={t} />;
   }
   if (activePage === "ultimate") {
-    return <VoxCPMPage mode={t("navUltimate")} status={status} appReady={appReady} accent="ultimate" modeKey="ultimate-cloning" description={t("ultimateDescription")} voices={voices} reload={reload} t={t} />;
+    return <VoxCPMPage key="ultimate-cloning" mode={t("navUltimate")} status={status} appReady={appReady} accent="ultimate" modeKey="ultimate-cloning" description={t("ultimateDescription")} voices={voices} reload={reload} t={t} />;
   }
   if (activePage === "indexTTS2") {
     return <IndexTTS2Page appReady={appReady} status={status} voices={voices} reload={reload} t={t} />;

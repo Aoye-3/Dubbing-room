@@ -14,6 +14,10 @@ from .generation_history import (
     mark_generation_failed,
     mark_generation_running,
     mark_generation_succeeded,
+    promote_generation_to_voice,
+    purge_generations,
+    restore_generation,
+    update_generation_favorite,
 )
 from .paths import AppPaths, default_project_root
 from .voice_library import create_voice, delete_voice, list_voices, update_voice
@@ -38,6 +42,7 @@ def _create_voice(paths: AppPaths, payload: dict[str, Any]) -> dict[str, Any]:
         tags=payload.get("tags") or [],
         notes=payload.get("notes") or "",
         source=payload.get("source") or "upload",
+        source_generation_id=payload.get("source_generation_id"),
         duration_seconds=payload.get("duration_seconds"),
     ).to_dict()
 
@@ -57,7 +62,14 @@ def _delete_voice(paths: AppPaths, payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def _list_generations(paths: AppPaths, payload: dict[str, Any]) -> dict[str, Any]:
-    return _items(list_generations(paths, include_deleted=bool(payload.get("include_deleted", False))))
+    return _items(
+        list_generations(
+            paths,
+            include_deleted=bool(payload.get("include_deleted", False)),
+            deleted_only=bool(payload.get("deleted_only", False)),
+            include_hidden=bool(payload.get("include_hidden", False)),
+        )
+    )
 
 
 def _create_generation(paths: AppPaths, payload: dict[str, Any]) -> dict[str, Any]:
@@ -72,6 +84,9 @@ def _create_generation(paths: AppPaths, payload: dict[str, Any]) -> dict[str, An
         inference_timesteps=payload.get("inference_timesteps", 10),
         normalize=payload.get("normalize", False),
         denoise=payload.get("denoise", False),
+        source_backend=payload.get("source_backend") or "voxcpm2",
+        source_mode=payload.get("source_mode") or "legacy",
+        description=payload.get("description") or "",
     ).to_dict()
 
 
@@ -96,6 +111,31 @@ def _delete_generation(paths: AppPaths, payload: dict[str, Any]) -> dict[str, An
     return delete_generation(paths, payload["id"]).to_dict()
 
 
+def _restore_generation(paths: AppPaths, payload: dict[str, Any]) -> dict[str, Any]:
+    return restore_generation(paths, payload["id"]).to_dict()
+
+
+def _update_generation_favorite(paths: AppPaths, payload: dict[str, Any]) -> dict[str, Any]:
+    return update_generation_favorite(paths, payload["id"], is_favorite=bool(payload.get("is_favorite", False))).to_dict()
+
+
+def _purge_generations(paths: AppPaths, payload: dict[str, Any]) -> dict[str, Any]:
+    ids = payload.get("ids") or []
+    if not isinstance(ids, list) or not all(isinstance(item, str) for item in ids):
+        raise ValueError("ids must be a list of generation ids")
+    return purge_generations(paths, ids)
+
+
+def _promote_generation_to_voice(paths: AppPaths, payload: dict[str, Any]) -> dict[str, Any]:
+    return promote_generation_to_voice(
+        paths,
+        payload["generation_id"],
+        display_name=payload["display_name"],
+        tags=payload.get("tags") or ["generated"],
+        notes=payload.get("notes") or "",
+    )
+
+
 ACTIONS: dict[str, Handler] = {
     "list-voices": _list_voices,
     "create-voice": _create_voice,
@@ -107,6 +147,10 @@ ACTIONS: dict[str, Handler] = {
     "mark-generation-succeeded": _mark_generation_succeeded,
     "mark-generation-failed": _mark_generation_failed,
     "delete-generation": _delete_generation,
+    "restore-generation": _restore_generation,
+    "update-generation-favorite": _update_generation_favorite,
+    "purge-generations": _purge_generations,
+    "promote-generation-to-voice": _promote_generation_to_voice,
 }
 
 

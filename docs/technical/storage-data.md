@@ -200,3 +200,48 @@ user selects take:
 - selected take 能投影到 legacy generation。
 
 - Phase 3 storage status (2026-07-02): storage v2 is active. `assets`, `generation_jobs`, and `generation_takes` are initialized additively. `generation_takes.legacy_generation_id` links the currently selected take to the legacy History projection. Failed takes stay in Jobs detail and are not projected to History. Selected take audio can be saved as a Voice Library entry by reusing the existing create-voice flow with `source: "take"`.
+
+## Phase 4 history and voice-linkage storage status (2026-07-06)
+
+Storage v4 keeps the legacy `voices` and `generations` tables as the user-facing compatibility surface, while adding explicit fields for source-aware history, trash, stars, and promotion into the voice library.
+
+New `generations` columns:
+
+```text
+source_backend TEXT NOT NULL DEFAULT 'voxcpm2'
+source_mode TEXT NOT NULL DEFAULT 'legacy'
+description TEXT NOT NULL DEFAULT ''
+is_favorite INTEGER NOT NULL DEFAULT 0
+saved_voice_id TEXT
+promoted_to_voice_at TEXT
+hidden_from_history_at TEXT
+```
+
+New `voices` column:
+
+```text
+source_generation_id TEXT
+```
+
+History visibility rules:
+
+- Normal History lists only records where `deleted_at is null` and `hidden_from_history_at is null`.
+- Trash lists records where `deleted_at is not null`; it does not include records hidden because they were promoted to a voice.
+- Promoting a generation to a voice sets `saved_voice_id`, `promoted_to_voice_at`, and `hidden_from_history_at` on the generation.
+- Promoted generations are not deleted; they remain traceable through `voices.source_generation_id` and `generations.saved_voice_id`.
+- Permanent purge is only valid for trashed generations. It deletes the generation row and its file under `data/app/generations/`, but does not delete any copied voice file under `data/app/voices/`.
+
+Source mode values currently written by production modules:
+
+```text
+voice-design
+voice-cloning
+ultimate-cloning
+indextts2-performance
+```
+
+Migration rule:
+
+- Additive migrations continue to live in `initialize_database()` with `_add_column_if_missing`.
+- New history columns must remain nullable or have safe defaults so old SQLite files continue to open.
+- Any future asset-level deduplication must preserve the current safety invariant: deleting a history generation must never remove an audio file still owned by a voice.

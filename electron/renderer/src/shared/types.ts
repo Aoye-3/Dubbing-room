@@ -44,6 +44,7 @@ export type AppVoice = {
   source: string;
   audio_path: string;
   audio_sha256: string;
+  source_generation_id: string | null;
   duration_seconds: number | null;
   created_at: string;
   updated_at: string;
@@ -62,10 +63,17 @@ export type AppGeneration = {
   inference_timesteps: number;
   normalize: boolean;
   denoise: boolean;
+  source_backend: string;
+  source_mode: string;
+  description: string;
+  is_favorite: boolean;
   output_audio_path: string | null;
   sample_rate: number | null;
   status: string;
   error_summary: string;
+  saved_voice_id: string | null;
+  promoted_to_voice_at: string | null;
+  hidden_from_history_at: string | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -93,6 +101,8 @@ export type GenerateAudioPayload = {
   retry_badcase: boolean;
   retry_badcase_max_times: number;
   retry_badcase_ratio_threshold: number;
+  source_mode: "voice-design" | "voice-cloning" | "ultimate-cloning";
+  description?: string;
   reference:
     | { kind: "none" }
     | { kind: "upload"; path: string }

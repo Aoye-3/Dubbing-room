@@ -1,8 +1,9 @@
-import { FileAudio, HelpCircle, Library, Play, RefreshCw, Save, SlidersHorizontal, Sparkles, Upload } from "lucide-react";
+import { HelpCircle, Library, RefreshCw, Save, SlidersHorizontal, Sparkles, Upload } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { apiClient } from "../shared/api/client";
-import { mediaUrl } from "../shared/audio";
+import { GenerationResultPanel } from "../shared/GenerationResultPanel";
 import { LoadingPanel } from "../shared/components";
+import { useGenerationAudioExport } from "../shared/useGenerationAudioExport";
 import type { AppGeneration, AppVoice, FeatureMode, GenerateAudioPayload, ReferenceKind, RuntimeBackendStatus, SelectedAudioFile, ShellStatus } from "../shared/types";
 import type { MessageKey } from "../app/i18n";
 
@@ -80,6 +81,7 @@ export function VoxCPMPage({
   const supportsReference = modeKey !== "voice-design";
   const requiresReference = modeKey === "ultimate-cloning";
   const runtimeUnavailable = runtime ? !runtime.configured || runtime.busy : false;
+  const generationAudioExport = useGenerationAudioExport(generatedRecord, t);
 
   const loadRuntime = useCallback(async () => {
     try {
@@ -182,6 +184,8 @@ export function VoxCPMPage({
         retry_badcase: retryBadcase,
         retry_badcase_max_times: retryBadcaseMaxTimes,
         retry_badcase_ratio_threshold: retryBadcaseRatioThreshold,
+        source_mode: modeKey as GenerateAudioPayload["source_mode"],
+        description: modeKey === "ultimate-cloning" ? promptText : controlInstruction,
         reference,
       });
       if (record) {
@@ -203,12 +207,14 @@ export function VoxCPMPage({
     setIsSaving(true);
     setError("");
     try {
-      await apiClient.createVoice({
-        source_audio_path: generatedRecord.output_audio_path,
+      const result = await apiClient.promoteGenerationToVoice({
+        generation_id: generatedRecord.id,
         display_name: generatedVoiceName.trim(),
         tags: ["generated"],
-        source: "generated",
       });
+      if (result?.generation) {
+        setGeneratedRecord(result.generation);
+      }
       setMessage(t("saveSuccess"));
       await reload();
     } catch (saveError) {
@@ -308,7 +314,23 @@ export function VoxCPMPage({
                 </label>
               )}
             </div>
-            <aside className="result-panel">
+            <GenerationResultPanel
+              record={generatedRecord}
+              sourceLabel={mode}
+              description={generatedRecord?.description || (modeKey === "ultimate-cloning" ? promptText : controlInstruction)}
+              voiceName={generatedVoiceName}
+              isSaving={isSaving}
+              message={message}
+              error={error}
+              onVoiceNameChange={setGeneratedVoiceName}
+              onSaveVoice={saveGeneratedVoice}
+              onExportAudio={generationAudioExport.exportAudio}
+              exportMessage={generationAudioExport.exportMessage}
+              exportError={generationAudioExport.exportError}
+              canExport={generationAudioExport.canExport}
+              canSaveVoice={Boolean(generatedRecord?.output_audio_path)}
+              t={t}
+            >
               {supportsReference && (
                 <ReferencePicker
                   voices={voices}
@@ -325,40 +347,7 @@ export function VoxCPMPage({
                   t={t}
                 />
               )}
-              <div className="result-header">
-                <FileAudio size={20} />
-                <h2>{t("generationOutput")}</h2>
-              </div>
-              {generatedRecord?.output_audio_path ? (
-                <div className="audio-result">
-                  <audio controls src={mediaUrl(generatedRecord.output_audio_path)} />
-                  <dl className="adapter-summary">
-                    <dt>{t("status")}</dt>
-                    <dd>{generatedRecord.status}</dd>
-                    <dt>{t("sampleRate")}</dt>
-                    <dd>{generatedRecord.sample_rate ? `${generatedRecord.sample_rate} Hz` : "--"}</dd>
-                  </dl>
-                  <div className="inline-save">
-                    <label>
-                      <FieldCaption hint={controlHints.generatedVoiceName}>{t("voiceName")}</FieldCaption>
-                      <input value={generatedVoiceName} onChange={(event) => setGeneratedVoiceName(event.target.value)} />
-                    </label>
-                    <button className="ghost-action" disabled={isSaving} onClick={saveGeneratedVoice} type="button">
-                      <Save size={17} />
-                      {t("saveGeneratedVoice")}
-                      <HelpBadge text={controlHints.saveGeneratedVoice} focusable={false} />
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="audio-placeholder">
-                  <Play size={22} />
-                  <span>{generatedRecord?.status === "failed" ? generatedRecord.error_summary : t("noGeneration")}</span>
-                </div>
-              )}
-              {message && <p className="status-line success">{message}</p>}
-              {error && <p className="status-line error">{error}</p>}
-            </aside>
+            </GenerationResultPanel>
           </>
         )}
       </div>

@@ -17,6 +17,7 @@ def _voice_from_row(row: sqlite3.Row) -> VoiceRecord:
         source=row["source"],
         audio_path=row["audio_path"],
         audio_sha256=row["audio_sha256"],
+        source_generation_id=row["source_generation_id"],
         duration_seconds=row["duration_seconds"],
         created_at=row["created_at"],
         updated_at=row["updated_at"],
@@ -37,10 +38,17 @@ def _generation_from_row(row: sqlite3.Row) -> GenerationRecord:
         inference_timesteps=row["inference_timesteps"],
         normalize=bool(row["normalize"]),
         denoise=bool(row["denoise"]),
+        source_backend=row["source_backend"],
+        source_mode=row["source_mode"],
+        description=row["description"],
+        is_favorite=bool(row["is_favorite"]),
         output_audio_path=row["output_audio_path"],
         sample_rate=row["sample_rate"],
         status=row["status"],
         error_summary=row["error_summary"],
+        saved_voice_id=row["saved_voice_id"],
+        promoted_to_voice_at=row["promoted_to_voice_at"],
+        hidden_from_history_at=row["hidden_from_history_at"],
         created_at=row["created_at"],
         updated_at=row["updated_at"],
         deleted_at=row["deleted_at"],
@@ -107,8 +115,9 @@ class VoiceRepository:
             """
             insert into voices (
                 id, display_name, tags, notes, source, audio_path, audio_sha256,
-                duration_seconds, created_at, updated_at, last_used_at, deleted_at
-            ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                source_generation_id, duration_seconds, created_at, updated_at, last_used_at,
+                deleted_at
+            ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 record.id,
@@ -118,6 +127,7 @@ class VoiceRepository:
                 record.source,
                 record.audio_path,
                 record.audio_sha256,
+                record.source_generation_id,
                 record.duration_seconds,
                 record.created_at,
                 record.updated_at,
@@ -386,9 +396,10 @@ class GenerationRepository:
             insert into generations (
                 id, input_text, control_instruction, voice_id, reference_audio_path,
                 prompt_text, cfg_value, inference_timesteps, normalize, denoise,
-                output_audio_path, sample_rate, status, error_summary, created_at,
-                updated_at, deleted_at
-            ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                source_backend, source_mode, description, is_favorite, output_audio_path,
+                sample_rate, status, error_summary, saved_voice_id, promoted_to_voice_at,
+                hidden_from_history_at, created_at, updated_at, deleted_at
+            ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 record.id,
@@ -401,10 +412,17 @@ class GenerationRepository:
                 record.inference_timesteps,
                 int(record.normalize),
                 int(record.denoise),
+                record.source_backend,
+                record.source_mode,
+                record.description,
+                int(record.is_favorite),
                 record.output_audio_path,
                 record.sample_rate,
                 record.status,
                 record.error_summary,
+                record.saved_voice_id,
+                record.promoted_to_voice_at,
+                record.hidden_from_history_at,
                 record.created_at,
                 record.updated_at,
                 record.deleted_at,
@@ -417,10 +435,17 @@ class GenerationRepository:
         row = self.conn.execute("select * from generations where id = ?", (generation_id,)).fetchone()
         return _generation_from_row(row) if row else None
 
-    def list(self, include_deleted: bool = False) -> list[GenerationRecord]:
+    def list(self, include_deleted: bool = False, deleted_only: bool = False, include_hidden: bool = False) -> list[GenerationRecord]:
         sql = "select * from generations"
-        if not include_deleted:
-            sql += " where deleted_at is null"
+        clauses: list[str] = []
+        if deleted_only:
+            clauses.append("deleted_at is not null")
+        elif not include_deleted:
+            clauses.append("deleted_at is null")
+        if not include_hidden:
+            clauses.append("hidden_from_history_at is null")
+        if clauses:
+            sql += " where " + " and ".join(clauses)
         sql += " order by created_at desc, rowid desc"
         return [_generation_from_row(row) for row in self.conn.execute(sql)]
 
@@ -433,6 +458,8 @@ class GenerationRepository:
             """
             update generations
             set output_audio_path = ?, sample_rate = ?, status = ?, error_summary = ?,
+                source_backend = ?, source_mode = ?, description = ?, is_favorite = ?,
+                saved_voice_id = ?, promoted_to_voice_at = ?, hidden_from_history_at = ?,
                 updated_at = ?, deleted_at = ?
             where id = ?
             """,
@@ -441,6 +468,13 @@ class GenerationRepository:
                 updated.sample_rate,
                 updated.status,
                 updated.error_summary,
+                updated.source_backend,
+                updated.source_mode,
+                updated.description,
+                int(updated.is_favorite),
+                updated.saved_voice_id,
+                updated.promoted_to_voice_at,
+                updated.hidden_from_history_at,
                 updated.updated_at,
                 updated.deleted_at,
                 generation_id,
@@ -448,4 +482,8 @@ class GenerationRepository:
         )
         self.conn.commit()
         return updated
+
+    def hard_delete(self, generation_id: str) -> None:
+        self.conn.execute("delete from generations where id = ?", (generation_id,))
+        self.conn.commit()
 

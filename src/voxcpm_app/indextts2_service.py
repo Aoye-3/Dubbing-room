@@ -245,6 +245,9 @@ class IndexTTS2Service:
             inference_timesteps=int(request.get("max_text_tokens_per_segment", 120)),
             normalize=False,
             denoise=False,
+            source_backend="indextts2",
+            source_mode="indextts2-performance",
+            description=str(request.get("emotion_mode") or "IndexTTS2 performance"),
         )
         mark_generation_running(self.paths, generation.id)
         output_path = self.paths.tmp_dir / f"{generation.id}-indextts2.wav"

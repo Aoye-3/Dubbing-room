@@ -152,7 +152,7 @@ pause
 goto menu
 
 :dev_shell
-call :print_header "VoxCPM Electron App Shell"
+call :print_header "Dubbing-room Electron App Shell"
 echo Command: wscript.exe start_electron_shell.vbs
 echo.
 wscript.exe start_electron_shell.vbs

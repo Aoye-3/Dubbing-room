@@ -18,6 +18,7 @@ def create_voice(
     tags: list[str] | None = None,
     notes: str = "",
     source: str = "upload",
+    source_generation_id: str | None = None,
     duration_seconds: float | None = None,
 ) -> VoiceRecord:
     name = display_name.strip()
@@ -34,6 +35,7 @@ def create_voice(
         source=source or "upload",
         audio_path=audio_path,
         audio_sha256=audio_sha256,
+        source_generation_id=source_generation_id,
         duration_seconds=duration_seconds,
         created_at=now,
         updated_at=now,
