@@ -1,93 +1,86 @@
-# Dubbing-room / VoxCPM-Box
+<p align="center">
+  <img src="./assets/readme/hero.svg" width="100%" alt="Dubbing-room：VoxCPM2 造声音，IndexTTS2 演台词，AppShell 管工作流">
+</p>
 
-**Dubbing-room** 是一个基于 `VoxCPM2` 与 `IndexTTS2` 的本地 AIGC 语音工作流配音室。它从早期的 VoxCPM-Box AppShell 演进而来，目标不再只是给 VoxCPM 增加桌面外壳，而是把声音资产、台词演绎、多 take、任务队列、生成历史和本地 runtime 管理组织成一个完整的配音工作台。
+<p align="center">
+  <strong>本地运行 · 双模型分工 · 声音资产 · 多 Take · 任务与历史</strong>
+</p>
 
-新公开地址：
+<p align="center">
+  <a href="#先看配音室">产品截图</a> ·
+  <a href="#一条完整的配音链">工作流</a> ·
+  <a href="#快速开始">快速开始</a> ·
+  <a href="#当前状态">当前状态</a> ·
+  <a href="./docs/README.md">文档</a>
+</p>
 
-- [Aoye-3/Dubbing-room](https://github.com/Aoye-3/Dubbing-room)
+**Dubbing-room** 是一个基于 `VoxCPM2` 与 `IndexTTS2` 的本地 AIGC 语音工作流配音室。它不是把两个模型放进同一个下拉菜单，而是让 VoxCPM2 负责创建和克隆声音，让 IndexTTS2 负责台词表演与多 Take，再由 Electron AppShell 统一管理声音资产、任务、历史和本地 runtime。
 
-上游与相关项目：
+> [!IMPORTANT]
+> 项目仍处于 Alpha 阶段。IndexTTS2 是可选本地 runtime，仓库不默认捆绑其模型权重；当前实现与后续计划请以[当前状态](#当前状态)为准。
 
-- [OpenBMB/VoxCPM](https://github.com/OpenBMB/VoxCPM)
-- [index-tts/index-tts](https://github.com/index-tts/index-tts)
+## 先看配音室
 
-## 迁移与项目关系
+### 台词进入表演台
 
-本项目正在从 **VoxCPM-Box** 迁移到 **Dubbing-room**。
+IndexTTS2 表演台把说话人参考、情绪模式、情绪强度和 Take 数放在同一个工作区内，用于精修单句台词。
 
-- **Dubbing-room**：新的产品定位和仓库地址，面向本地 AIGC 配音工作流。
-- **原始 VoxCPM-Box**：早期项目名和 AppShell 阶段，主要目标是在 VoxCPM 基础上增加 Electron 桌面应用层、Voice Library、History 和本地数据服务。
-- **VoxCPM / VoxCPM2**：上游语音生成能力来源。Dubbing-room 保留原始 Gradio/developer route，用于上游兼容、模型行为验证和回归检查。
-- **IndexTTS2**：作为可选本地 runtime 接入，负责台词级表演控制、情绪控制、多 take 精修和 selected take 输出。
+<p align="center">
+  <img src="./assets/readme/indextts2-stage.png" width="100%" alt="Dubbing-room 的 IndexTTS2 表演台，包含说话人参考、情绪控制、多 Take 参数与生成结果">
+</p>
 
-简化理解：
+### 声音先成为可复用资产
 
-```text
-OpenBMB/VoxCPM
-  -> 提供 VoxCPM/VoxCPM2 上游模型能力和原始开发入口
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="./assets/readme/voice-design.png" width="100%" alt="使用文本与控制提示进行 VoxCPM2 声音设计">
+      <br><strong>声音设计</strong><br>
+      用目标文本与控制提示生成旁白、角色声音或基础声音素材。
+    </td>
+    <td width="50%" valign="top">
+      <img src="./assets/readme/voice-clone.png" width="100%" alt="使用上传音频或已有音色进行 VoxCPM2 声音克隆">
+      <br><strong>声音克隆</strong><br>
+      从上传音频或 Voice Library 中选择参考声音，生成可继续使用的结果。
+    </td>
+  </tr>
+</table>
 
-VoxCPM-Box
-  -> 早期桌面 AppShell、Voice Library、History、本地应用层探索
+## 一条完整的配音链
 
-Dubbing-room
-  -> 当前产品方向：IndexTTS2 + VoxCPM2 的本地 AIGC 语音工作流配音室
-```
+<p align="center">
+  <img src="./assets/readme/studio-workflow.svg" width="100%" alt="VoxCPM2 与 IndexTTS2 在 Dubbing-room 中组成小型配音室的工作流">
+</p>
 
-Dubbing-room 不是官方 VoxCPM 项目，也不是 IndexTTS2 官方项目。它是一个独立的本地桌面应用层，复用和适配两类模型能力，并把它们组织成创作工作流。
+1. **造声音**：用 VoxCPM2 进行声音设计、声音克隆，或通过可选 LoRA 路线准备基础声音。
+2. **存资产**：把可复用结果放入 Voice Library，作为后续的说话人参考。
+3. **演台词**：把台词、说话人参考与情绪控制交给 IndexTTS2，生成多个 Take。
+4. **选版本**：比较结果，选择最终 Take，并将生成记录与音频输出留在本地 History / files 中。
 
-## 产品定位
+贯穿这条链路的 AppShell 负责本地存储、FIFO 任务队列和 runtime 状态；`RuntimeCoordinator` 用单一 lease 防止 VoxCPM2 与 IndexTTS2 同时占用同一 GPU。
 
-Dubbing-room 面向这些任务：
+## 双模型，各司其职
 
-- 用 VoxCPM2 快速生成旁白、角色声音或基础声音资产。
-- 把生成结果保存到 Voice Library，作为后续 speaker reference。
-- 用 IndexTTS2 对单句台词做情绪、语气和表演精修。
-- 为同一句台词生成多个 take，播放、比较并选择最佳版本。
-- 将 selected take 写入 History，并可继续保存为可复用声音。
-- 在本地管理 runtime、checkpoints、cache、SQLite 数据库和音频输出。
+| 模块 | 在配音室里的职责 |
+| --- | --- |
+| `VoxCPM2` | 通用语音生成、旁白、声音设计、声音克隆与基础声音资产准备 |
+| `IndexTTS2` | 说话人参考、台词级演绎、情绪控制、多 Take 生成与版本选择 |
+| AppShell backend | 本地存储、任务队列、runtime 互斥、History / Voice Library 兼容 |
+| Electron renderer | 声音工作台、Jobs 视图、资产管理和操作反馈 |
 
-双模型职责不是下拉菜单式切换，而是工作流分工：
-
-| 模块 | 职责 |
-|---|---|
-| `VoxCPM2` | 通用语音生成、旁白、声音克隆、基础声音资产准备 |
-| `IndexTTS2` | 台词级演绎、情绪控制、多 take 精修、最终版本选择 |
-| AppShell backend | 本地存储、任务队列、runtime 显存互斥、History/Voice Library 兼容 |
-| Electron renderer | 配音室工作台、Jobs 视图、声音资产管理和操作反馈 |
-
-## 当前状态
-
-已完成或正在接入：
-
-- Electron + React + TypeScript AppShell。
-- Python 本地后端和 Electron IPC bridge。
-- Voice Library 与 Generation History 的本地 SQLite/file 存储基础。
-- VoxCPM2 AppShell 生成闭环。
-- IndexTTS2 表演台页面、IPC、后端生成入口和 `third_party/index-tts/` 源码快照。
-- 统一 `RuntimeCoordinator`，用于防止 VoxCPM2 和 IndexTTS2 同时占用 GPU。
-- Additive storage v2：`assets`、`generation_jobs`、`generation_takes`。
-- 单进程 FIFO generation job queue。
-- Jobs 页面基础能力：queued/running/succeeded/failed/cancelled、取消 queued job、重试 failed job、查看 takes。
-
-仍在推进：
-
-- 前端从大型 `main.tsx` 拆分到 `app/`、`shared/`、`voxcpm/`、`indextts2/`、`jobs/`、`storage/`。
-- IndexTTS2 多 take 比较面板产品化。
-- selected take 保存为 Voice Library 音色。
-- 真实 runtime unload contract。
-- 根 README、技术文档和 ADR 的持续同步。
+Dubbing-room 是独立的本地桌面应用层，不是 OpenBMB/VoxCPM 或 IndexTTS2 的官方项目。它从早期 **VoxCPM-Box** AppShell 演进而来，并尽量把产品能力留在应用层，降低对上游模型内部实现的侵入。
 
 ## 快速开始
 
-### AppShell route
+### 启动桌面 AppShell
 
-启动 Dubbing-room 桌面 AppShell：
+当前 Windows 启动入口：
 
 ```bat
 start_electron_shell.bat
 ```
 
-或无可见终端启动：
+无可见终端启动：
 
 ```bat
 start_electron_shell.vbs
@@ -100,37 +93,29 @@ npm.cmd install
 npm.cmd run dev
 ```
 
-### Legacy / developer Gradio route
+### 保留的 VoxCPM developer route
 
-保留原始 VoxCPM WebUI，用于上游兼容检查：
+原始 Gradio 入口仍用于上游兼容、模型行为验证和回归检查：
 
 ```bat
 start_voxcpm.bat
 ```
 
-直接运行示例：
+或直接运行：
 
 ```bat
 python run_with_local_ffmpeg.py app.py --port 8808 --device cuda
 ```
 
-## IndexTTS2 runtime
+### 配置可选 IndexTTS2 runtime
 
-IndexTTS2 是可选本地 runtime。仓库不会默认捆绑 IndexTTS2 权重。
-
-准备项目内 runtime/cache 目录：
+先准备项目内 runtime / cache 目录：
 
 ```powershell
 .\scripts\prepare_indextts2_runtime.ps1
 ```
 
-默认 runtime root：
-
-```text
-data/runtimes/indextts2/
-```
-
-需要放置或配置的关键文件包括：
+默认 runtime root 为 `data/runtimes/indextts2/`。需要自行放置或配置：
 
 ```text
 data/runtimes/indextts2/.venv/Scripts/python.exe
@@ -142,7 +127,30 @@ third_party/index-tts/checkpoints/s2mel.pth
 
 所有 runtime、cache、checkpoint、输出和数据库都应留在当前仓库所在驱动器内，不应写入 C 盘缓存或外部临时目录。
 
-## 常用检查
+## 当前状态
+
+已经具备或已接入：
+
+- Electron + React + TypeScript AppShell，以及 Python 本地后端和 IPC bridge。
+- VoxCPM2 AppShell 生成闭环；Voice Library 与 Generation History 的 SQLite / file 存储基础。
+- IndexTTS2 表演台、IPC、后端生成入口与 `third_party/index-tts/` 源码快照。
+- IndexTTS2 的说话人参考、情绪音频 / 向量 / 文本控制与多 Take 后端能力。
+- 统一 `RuntimeCoordinator`、单进程 FIFO generation job queue。
+- Additive storage v2：`assets`、`generation_jobs`、`generation_takes`。
+- Jobs 基础状态与操作：queued / running / succeeded / failed / cancelled、取消 queued job、重试 failed job、查看 takes。
+
+仍在推进：
+
+- 前端从大型 `main.tsx` 继续拆分到 `app/`、`shared/`、`voxcpm/`、`indextts2/`、`jobs/`、`storage/`。
+- IndexTTS2 多 Take 比较面板产品化。
+- selected Take 保存为 Voice Library 音色。
+- 真实 runtime unload contract。
+- 根 README、技术文档和 ADR 的持续同步。
+
+## 开发与验证
+
+<details>
+<summary><strong>常用检查命令</strong></summary>
 
 Frontend type check：
 
@@ -170,32 +178,22 @@ Python AppShell tests：
 .venv\Scripts\python.exe -m pytest tests\test_voxcpm_app_storage.py tests\test_voxcpm_app_service_cli.py tests\test_voxcpm_app_generation_service.py tests\test_voxcpm_app_indextts2_service.py -q --basetemp data\pytest-tmp
 ```
 
-## 项目结构
+</details>
+
+<details>
+<summary><strong>项目与本地数据结构</strong></summary>
 
 ```text
-electron/                         Electron main process and React renderer
+electron/                           Electron main process and React renderer
 electron/renderer/src/jobs/        Jobs view and take list UI
-src/voxcpm_app/                    Python AppShell backend
-src/voxcpm_app/runtime.py          RuntimeCoordinator and backend status
-src/voxcpm_app/job_queue.py        FIFO generation job queue
-src/voxcpm_app/job_store.py        assets/jobs/takes service helpers
-third_party/index-tts/             IndexTTS2 source snapshot
-docs/                              Product, technical, PRD, and app-dev docs
+src/voxcpm_app/                     Python AppShell backend
+src/voxcpm_app/runtime.py           RuntimeCoordinator and backend status
+src/voxcpm_app/job_queue.py         FIFO generation job queue
+src/voxcpm_app/job_store.py         Assets / jobs / takes service helpers
+third_party/index-tts/              IndexTTS2 source snapshot
 scripts/prepare_indextts2_runtime.ps1
+docs/                               Product, technical, PRD, and app-dev docs
 ```
-
-目标 renderer 结构：
-
-```text
-electron/renderer/src/app/         App bootstrap, routes, shell, i18n
-electron/renderer/src/shared/      API client, shared types, reusable components
-electron/renderer/src/voxcpm/      VoxCPM2 production workspace
-electron/renderer/src/indextts2/   IndexTTS2 line performance workspace
-electron/renderer/src/jobs/        Job queue and take inspection
-electron/renderer/src/storage/     Voice Library and History
-```
-
-本地数据结构：
 
 ```text
 data/app/app.sqlite3
@@ -205,7 +203,9 @@ data/app/tmp/
 data/runtimes/indextts2/
 ```
 
-## 文档入口
+</details>
+
+## 文档
 
 - [文档总入口](docs/README.md)
 - [当前主 PRD：AIGC 语音工作流配音室](docs/PRD/aigc-voice-workflow-studio-prd.md)
@@ -214,34 +214,10 @@ data/runtimes/indextts2/
 - [App 开发文档](docs/app-dev/README.md)
 - [RuntimeCoordinator ADR](docs/app-dev/adr/0002-dual-model-runtime-coordinator.md)
 
-## 上游同步策略
+## 上游与许可证
 
-当同步 OpenBMB/VoxCPM 上游变化时：
+- 当前公开仓库：[Aoye-3/Dubbing-room](https://github.com/Aoye-3/Dubbing-room)
+- 语音生成上游：[OpenBMB/VoxCPM](https://github.com/OpenBMB/VoxCPM)
+- 台词表演上游：[index-tts/index-tts](https://github.com/index-tts/index-tts)
 
-1. 优先保持原始 VoxCPM 文件和入口可运行。
-2. 验证 legacy/developer Gradio route。
-3. 验证 Dubbing-room AppShell route。
-4. 如果上游启动参数、模型调用方式或依赖发生变化，再更新 AppShell adapters/services。
-5. 尽量避免修改模型内部实现；产品功能放在应用层。
-
-适合回馈上游 VoxCPM 的内容：
-
-- Windows 兼容修复。
-- 本地 FFmpeg/path 处理。
-- CLI 或文档修正。
-- 对所有 VoxCPM 用户有价值的小 bugfix。
-
-适合留在 Dubbing-room 的内容：
-
-- Electron AppShell。
-- Voice Library / History。
-- IndexTTS2 台词工作台。
-- Job queue / takes / runtime status。
-- 本地 SQLite/file 数据模型。
-- AIGC 配音工作流产品功能。
-
-## License
-
-Dubbing-room 需要遵守上游 VoxCPM 的许可证和归属要求。分发模型权重、源码或打包 runtime 前，请检查 [OpenBMB/VoxCPM](https://github.com/OpenBMB/VoxCPM) 的许可证。
-
-IndexTTS2 有独立的上游许可证和模型使用条款。当前仓库仅保留 `third_party/index-tts/` 源码快照，不默认捆绑 IndexTTS2 权重；商业使用或大规模再分发前需要单独审查 [index-tts/index-tts](https://github.com/index-tts/index-tts) 的许可证和模型条款。
+项目代码遵循仓库中的 [LICENSE](LICENSE)。分发模型权重、源码快照或打包 runtime 前，还需要分别检查 VoxCPM 与 IndexTTS2 的上游许可证和模型使用条款；当前仓库不默认捆绑 IndexTTS2 权重。

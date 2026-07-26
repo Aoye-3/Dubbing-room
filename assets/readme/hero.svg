@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="380" viewBox="0 0 1200 380" role="img" aria-labelledby="title desc">
+  <title id="title">Dubbing-room</title>
+  <desc id="desc">VoxCPM2 creates and clones voices, IndexTTS2 performs dialogue, and AppShell coordinates the local workflow.</desc>
+  <defs>
+    <marker id="arrow-dark" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#77766F"/>
+    </marker>
+  </defs>
+
+  <rect width="1200" height="380" rx="28" fill="#F7F6F2"/>
+  <path d="M0 28C0 12.536 12.536 0 28 0H72V380H28C12.536 380 0 367.464 0 352V28Z" fill="#E3B23C"/>
+  <path d="M28 82C28 68.745 38.745 58 52 58H72V154H52C38.745 154 28 143.255 28 130V82Z" fill="#202124"/>
+  <circle cx="50" cy="92" r="6" fill="#F7F6F2"/>
+  <circle cx="50" cy="120" r="6" fill="#F7F6F2"/>
+
+  <g id="title-block" transform="translate(120 56)" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif">
+    <text x="0" y="18" font-size="18" font-weight="700" letter-spacing="3" fill="#8B6B21">LOCAL AIGC DUBBING WORKFLOW</text>
+    <text x="0" y="98" font-size="64" font-weight="800" letter-spacing="-1.5" fill="#202124">Dubbing-room</text>
+    <text x="0" y="152" font-size="26" font-weight="650" fill="#202124">把两个本地语音模型，编排成一间小型配音室。</text>
+    <text x="0" y="198" font-size="20" fill="#68675F">VoxCPM2 造声音 · IndexTTS2 演台词 · AppShell 管工作流</text>
+
+    <g transform="translate(0 240)" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="15" font-weight="700">
+      <rect width="132" height="38" rx="19" fill="#F0D78E"/>
+      <text x="66" y="25" text-anchor="middle" fill="#5F470F">VOICE ASSET</text>
+      <rect x="144" width="116" height="38" rx="19" fill="#B9DDDA"/>
+      <text x="202" y="25" text-anchor="middle" fill="#155F5D">MULTI TAKE</text>
+      <rect x="272" width="126" height="38" rx="19" fill="#E4E2DA"/>
+      <text x="335" y="25" text-anchor="middle" fill="#55544E">LOCAL FIRST</text>
+    </g>
+  </g>
+
+  <g id="studio-signal" transform="translate(690 38)" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif">
+    <rect width="462" height="304" rx="22" fill="#FCFBF8" stroke="#D8D5CB" stroke-width="2"/>
+    <text x="28" y="34" font-size="14" font-weight="700" letter-spacing="2" fill="#77766F">STUDIO SIGNAL / LOCAL</text>
+
+    <rect x="28" y="58" width="174" height="70" rx="16" fill="#E3B23C"/>
+    <text x="48" y="85" font-size="14" font-weight="700" fill="#5F470F">01 · CREATE</text>
+    <text x="48" y="111" font-size="22" font-weight="800" fill="#202124">VoxCPM2</text>
+
+    <path d="M202 93H236" stroke="#77766F" stroke-width="2" marker-end="url(#arrow-dark)"/>
+    <rect x="248" y="58" width="186" height="70" rx="16" fill="#EEECE5" stroke="#D8D5CB"/>
+    <text x="268" y="85" font-size="14" font-weight="700" fill="#77766F">02 · STORE</text>
+    <text x="268" y="111" font-size="21" font-weight="800" fill="#202124">Voice Library</text>
+
+    <path d="M341 128V154" stroke="#77766F" stroke-width="2" marker-end="url(#arrow-dark)"/>
+    <rect x="28" y="166" width="174" height="70" rx="16" fill="#238A88"/>
+    <text x="48" y="193" font-size="14" font-weight="700" fill="#D9F2F0">03 · PERFORM</text>
+    <text x="48" y="219" font-size="22" font-weight="800" fill="#FFFFFF">IndexTTS2</text>
+
+    <path d="M202 201H236" stroke="#77766F" stroke-width="2" marker-end="url(#arrow-dark)"/>
+    <rect x="248" y="166" width="186" height="70" rx="16" fill="#D8ECEA"/>
+    <text x="268" y="193" font-size="14" font-weight="700" fill="#155F5D">04 · SELECT</text>
+    <text x="268" y="219" font-size="21" font-weight="800" fill="#202124">Selected Take</text>
+
+    <rect x="28" y="258" width="406" height="26" rx="13" fill="#202124"/>
+    <circle cx="48" cy="271" r="5" fill="#42A878"/>
+    <text x="64" y="276" font-size="12" font-weight="700" letter-spacing="0.5" fill="#F7F6F2">APPSHELL · JOBS · HISTORY · RUNTIME COORDINATOR</text>
+  </g>
+</svg>
