@@ -18,7 +18,7 @@
 - `src/voxcpm_app/generation_service.py`
 - `VoxCPMSynthesizer`
 - `GenerationService`
-- 前端 `GenerationPage`
+- 前端 `electron/renderer/src/voxcpm/VoxCPMPage.tsx`
 
 ### IndexTTS2
 
@@ -66,12 +66,14 @@ src/voxcpm_app/runtime.py
 - 没有 CUDA cache cleanup。
 - 没有跨进程锁。
 
-## 目标 RuntimeCoordinator
+## Runtime 状态契约
 
-应支持：
+`GET /runtime-backends` 当前返回：
 
 ```text
 backend_id
+display_name
+enabled
 active_job_id
 busy
 loaded
@@ -80,27 +82,33 @@ device
 started_at
 last_error
 capabilities
+state
+details
 ```
 
-目标状态：
+当前状态值：
 
-- `enabled`
-- `disabled`
 - `configured`
 - `missing_runtime`
 - `missing_checkpoints`
 - `busy`
 - `loaded`
-- `failed`
 
-目标行为：
+`enabled` / `configured` / `loaded` / `busy` 是独立布尔字段。运行失败通过 `last_error` 和结构化错误响应表示，当前不会把 `state` 设置为单独的 `failed` 值。
+
+当前行为：
 
 - VoxCPM2 和 IndexTTS2 使用同一个 GPU lease。
 - 默认 GPU slot = 1。
-- 切换模型前释放当前 lease。
-- 可选执行 unload。
-- 清理 CUDA cache。
+- lease 在成功或异常退出时释放。
 - 前端只展示状态，不决定并发。
+
+尚未实现：
+
+- 真实 load/unload/free；当前 unload route 只返回 `unloaded: false`。
+- CUDA cache cleanup。
+- 跨进程 runtime lock。
+- running job 的强制中断。
 
 ## IndexTTS2 runtime 路径
 
@@ -128,23 +136,29 @@ third_party/index-tts/checkpoints/
 third_party/index-tts/checkpoints/config.yaml
 ```
 
-必需 checkpoint 文件：
+必需 checkpoint 文件和目录：
 
 ```text
 config.yaml
 bpe.model
 gpt.pth
 s2mel.pth
+wav2vec2bert_stats.pt
+feat1.pt
+feat2.pt
+qwen0.6bemo4-merge/
+hf_cache/semantic_codec_model.safetensors
+hf_cache/campplus_cn_common.bin
+hf_cache/bigvgan/config.json
+hf_cache/bigvgan/bigvgan_generator.pt
+hf_cache/w2v-bert-2.0/
 ```
 
-当前本地缺失：
+2026-08-07 本地资源检查：
 
-- runtime python。
-- `config.yaml`。
-- `gpt.pth`。
-- `s2mel.pth`。
-- `bpe.model`。
-- 其他辅助模型 cache。
+- `data/runtimes/indextts2/.venv/Scripts/python.exe` 存在。
+- 上述 checkpoint 文件和目录均存在。
+- 这只表示文件清单就绪，不代表模型能够成功加载或完成 GPU 推理；真实 smoke test 仍未记录。
 
 ## IndexTTS2 环境隔离
 
@@ -154,20 +168,22 @@ s2mel.pth
 data/runtimes/indextts2/
 ```
 
-建议环境变量：
+先准备项目内环境变量和缓存目录：
 
 ```powershell
 .\scripts\prepare_indextts2_runtime.ps1
 ```
 
-建议命令：
+脚本只创建/声明项目内路径，不下载依赖或 checkpoint。后续依赖安装和模型下载也必须沿用该脚本设置的 `UV_*`、`HF_*` 和 cache 环境变量，不能写到 C 盘或用户级目录。
+
+运行时就绪检查以 `/runtime-backends` 的 `indextts2` 条目为准；仓库当前没有 `tools/gpu_check.py`，不要把该命令作为验收入口。
+
+基础路径检查：
 
 ```powershell
-Set-Location F:\.VoxCPM\VoxCPM\third_party\index-tts
-uv sync
-uv tool install "huggingface-hub[cli,hf_xet]"
-hf download IndexTeam/IndexTTS-2 --local-dir F:\.VoxCPM\VoxCPM\third_party\index-tts\checkpoints
-uv run tools/gpu_check.py
+.\scripts\prepare_indextts2_runtime.ps1
+Test-Path .\data\runtimes\indextts2\.venv\Scripts\python.exe
+Test-Path .\third_party\index-tts\checkpoints\config.yaml
 ```
 
 ## Worker 参数事实
@@ -185,6 +201,7 @@ uv run tools/gpu_check.py
 - `use_random`
 - `interval_silence`
 - `max_text_tokens_per_segment`
+- `do_sample`
 - `top_p`
 - `top_k`
 - `temperature`
@@ -192,13 +209,18 @@ uv run tools/gpu_check.py
 - `num_beams`
 - `repetition_penalty`
 - `max_mel_tokens`
+- `use_fp16`
+- `use_cuda_kernel`
+- `use_deepspeed`
+- `use_accel`
+- `use_torch_compile`
 
-缺口：
+补充状态：
 
-- `use_accel` 未传。
-- `use_torch_compile` 未传。
-- `aux_paths` 未传。
-- `do_sample` 上游可能实际写死为 true。
+- acceleration flags 已传到 IndexTTS2 构造边界。
+- `device` 已从 service payload 传给 worker/model。
+- worker timeout、末行 JSON 解析、结构化错误保留和输出文件校验已有自动化覆盖。
+- `do_sample` 在 VoxCPM2 上游路径仍可能写死；本地 contract 保留该字段但不能承诺改变上游采样行为。
 
 ## 失败模式
 
@@ -221,9 +243,8 @@ uv run tools/gpu_check.py
 
 ## 下一步实现顺序
 
-1. VoxCPM2 接入 `RuntimeCoordinator`。
-2. `RuntimeCoordinator` 扩展 active job 和状态。
-3. IndexTTS2 status 完整检查 checkpoints。
-4. worker 传 device。
-5. 增加 timeout 和错误分类。
-6. 配置真实 runtime。
+1. 在当前项目内 runtime/checkpoint 上完成 VoxCPM2 与 IndexTTS2 真实 smoke test。
+2. 验证真实并发请求不会绕过单 GPU lease，并确认异常后 lease/state 恢复。
+3. 定义并实现 unload/free 和 running cancellation contract。
+4. 增加跨进程锁或明确限制只能运行一个 Python backend 实例。
+5. 把 structured runtime error 的 `code` / `details` 保留到 Electron/Renderer UI。

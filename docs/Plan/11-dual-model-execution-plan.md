@@ -87,10 +87,9 @@ IndexTTS2 adapter contract
 4. Real Model Acceptance: real VoxCPM2 and IndexTTS2 smoke tests pass in a project-local runtime.
 5. Hardening and Documentation: tests, docs, and packaging notes reflect the implemented behavior.
 
-## Execution Status (2026-07-02)
+## Execution Status (2026-08-07)
 
-Phase 1 and Phase 2 have been implemented on branch
-`codex/model-api-adapter-alignment`.
+Phase 1 and Phase 2 are implemented. The basic Phase 3 job/take product loop is also implemented in the current code baseline. Phase 4 real-model acceptance has not been executed, and Phase 5 hardening/documentation is in progress.
 
 Completed scope:
 
@@ -99,15 +98,19 @@ Completed scope:
 - IndexTTS2 now validates project-local runtime paths, reports missing checkpoint details, classifies worker failures, verifies output files, and forwards acceleration toggles.
 - Settings now shows runtime readiness cards for both model backends.
 - VoxCPM2 and IndexTTS2 workbenches now expose the Phase 2 parameters.
+- Additive storage provides assets, jobs, and takes without replacing the legacy Voice Library and History surface.
+- Job APIs support create/list/get, queued cancel, retry, take list, and take selection.
+- IndexTTS2 queued jobs support 1-5 takes, selected-take History projection, playback, and save-as-voice.
+- Generation History supports favorites, Trash, restore, permanent purge, export, and promotion to Voice Library.
 
 Verification completed:
 
-- `.venv\Scripts\python.exe -m pytest tests\test_voxcpm_app_storage.py tests\test_voxcpm_app_service_cli.py tests\test_voxcpm_app_generation_service.py tests\test_voxcpm_app_indextts2_service.py --basetemp data\pytest-tmp` -> 37 passed.
+- `.venv\Scripts\python.exe -m pytest tests\test_voxcpm_app_storage.py tests\test_voxcpm_app_service_cli.py tests\test_voxcpm_app_generation_service.py tests\test_voxcpm_app_indextts2_service.py --basetemp data\pytest-tmp` -> 45 passed in 10.01s.
 - `npm.cmd run typecheck` -> passed.
-- `npm.cmd run build` -> passed.
-- `node --check electron\main.js` -> passed.
-- `node --check electron\preload.js` -> passed.
-- `git diff --check` -> passed with CRLF warnings only.
+- `npm.cmd run build` -> passed; 1717 modules transformed.
+- `node --check electron\main.js`, `preload.js`, and `dev-runner.js` -> passed.
+- `git diff --check` -> passed; working-tree CRLF warnings only.
+- Project-local IndexTTS2 runtime Python and the documented checkpoint inventory are present; no real inference was run.
 
 See [Phase 1/2 Runtime and UI Implementation Notes](../technical/phase-1-2-runtime-ui-implementation.md) for the current runtime, API, renderer, and testing contract.
 
@@ -118,13 +121,13 @@ See [Phase 1/2 Runtime and UI Implementation Notes](../technical/phase-1-2-runti
 **Description:** Extend runtime status so `/runtime-backends` reports whether each backend is configured, missing runtime, missing checkpoints, busy, loaded, or failed.
 
 **Acceptance criteria:**
-- [ ] VoxCPM2 status includes backend id, display name, enabled, configured, busy, loaded, device, capabilities, active job id, and last error.
-- [ ] IndexTTS2 status reports missing source snapshot, runtime python, config, checkpoint, and auxiliary model files separately enough for UI display.
-- [ ] Busy state comes from backend lease state, not renderer assumptions.
+- [x] VoxCPM2 status includes backend id, display name, enabled, configured, busy, loaded, device, capabilities, active job id, and last error.
+- [x] IndexTTS2 status reports missing source snapshot, runtime python, config, checkpoint, and auxiliary model files separately enough for UI display.
+- [x] Busy state comes from backend lease state, not renderer assumptions.
 
 **Verification:**
-- [ ] Add or update Python tests for `/runtime-backends`.
-- [ ] Run `.\.venv\Scripts\python.exe -m pytest tests\test_voxcpm_app_indextts2_service.py tests\test_voxcpm_app_generation_service.py --basetemp data\pytest-tmp`.
+- [x] Add or update Python tests for `/runtime-backends`.
+- [x] Run `.\.venv\Scripts\python.exe -m pytest tests\test_voxcpm_app_indextts2_service.py tests\test_voxcpm_app_generation_service.py --basetemp data\pytest-tmp`.
 
 **Dependencies:** None
 
@@ -143,14 +146,14 @@ See [Phase 1/2 Runtime and UI Implementation Notes](../technical/phase-1-2-runti
 **Description:** Ensure all default runtime, cache, checkpoint, and test temp paths stay inside the current project workspace.
 
 **Acceptance criteria:**
-- [ ] VoxCPM2 default cache path is under `data/runtimes/voxcpm2/hf-cache`.
-- [ ] IndexTTS2 default runtime path is under `data/runtimes/indextts2/`.
-- [ ] IndexTTS2 default checkpoint path remains `third_party/index-tts/checkpoints/`.
-- [ ] No default path points to C:, OS temp, user cache, or a cloned repo.
+- [x] VoxCPM2 default cache path is under `data/runtimes/voxcpm2/hf-cache`.
+- [x] IndexTTS2 default runtime path is under `data/runtimes/indextts2/`.
+- [x] IndexTTS2 default checkpoint path remains `third_party/index-tts/checkpoints/`.
+- [x] No default path points to C:, OS temp, user cache, or a cloned repo.
 
 **Verification:**
-- [ ] Add tests for default path resolution.
-- [ ] Run Python tests with `--basetemp data\pytest-tmp`.
+- [x] Add tests for default path resolution.
+- [x] Run Python tests with `--basetemp data\pytest-tmp`.
 - [ ] Manually inspect `/runtime-backends` output.
 
 **Dependencies:** Task 1
@@ -168,12 +171,12 @@ See [Phase 1/2 Runtime and UI Implementation Notes](../technical/phase-1-2-runti
 **Description:** Return consistent JSON errors for validation, missing runtime, missing checkpoints, runtime busy, worker failure, timeout, and missing output.
 
 **Acceptance criteria:**
-- [ ] Backend errors include `error`, `type`, `code`, and optional `details`.
-- [ ] Synchronous legacy routes still return compatible failure records where expected.
+- [x] Backend errors include `error`, `type`, `code`, and optional `details`.
+- [x] Synchronous legacy routes still return compatible failure records where expected.
 - [ ] Frontend can distinguish configuration failures from synthesis failures.
 
 **Verification:**
-- [ ] Add backend route tests for non-2xx error payloads.
+- [x] Add backend route tests for non-2xx error payloads.
 - [ ] Run `.\.venv\Scripts\python.exe -m pytest tests --basetemp data\pytest-tmp`.
 
 **Dependencies:** Task 1
@@ -189,10 +192,10 @@ See [Phase 1/2 Runtime and UI Implementation Notes](../technical/phase-1-2-runti
 
 ### Checkpoint: Runtime Readiness
 
-- [ ] `/runtime-backends` is the single source of truth for renderer model status.
-- [ ] Missing runtime and missing checkpoints are visible before generation starts.
-- [ ] Existing generation and IndexTTS2 fake-runner tests still pass.
-- [ ] `npm.cmd run typecheck` passes.
+- [x] `/runtime-backends` is the single source of truth for renderer model status.
+- [x] Missing runtime and missing checkpoints are visible before generation starts.
+- [x] Existing generation and IndexTTS2 fake-runner tests still pass.
+- [x] `npm.cmd run typecheck` passes.
 
 ## Phase 2: Parameterized Workbenches
 
@@ -201,15 +204,15 @@ See [Phase 1/2 Runtime and UI Implementation Notes](../technical/phase-1-2-runti
 **Description:** Expose the stable VoxCPM2 generation controls in the renderer and send them through the existing backend contract.
 
 **Acceptance criteria:**
-- [ ] Voice Design submits text plus optional natural-language control.
-- [ ] Voice Clone submits saved voice or uploaded reference.
-- [ ] Ultimate Clone submits reference audio plus transcript and does not mix control instruction into generated text.
-- [ ] Payload supports `cfg_value`, `inference_timesteps`, `min_len`, `max_len`, `normalize`, `denoise`, and `retry_badcase` settings.
+- [x] Voice Design submits text plus optional natural-language control.
+- [x] Voice Clone submits saved voice or uploaded reference.
+- [x] Ultimate Clone submits reference audio plus transcript and does not mix control instruction into generated text.
+- [x] Payload supports `cfg_value`, `inference_timesteps`, `min_len`, `max_len`, `normalize`, `denoise`, and `retry_badcase` settings.
 
 **Verification:**
-- [ ] Add frontend type coverage for the payload.
+- [x] Add frontend type coverage for the payload.
 - [ ] Add fake-backend or component-level payload tests if available.
-- [ ] Run `npm.cmd run typecheck`.
+- [x] Run `npm.cmd run typecheck`.
 
 **Dependencies:** Task 1
 
@@ -227,17 +230,17 @@ See [Phase 1/2 Runtime and UI Implementation Notes](../technical/phase-1-2-runti
 **Description:** Shape the IndexTTS2 page around line-level performance: script line, selected voice, emotion source, performance parameters, and generation action.
 
 **Acceptance criteria:**
-- [ ] Page requires a speaker from upload or Voice Library.
-- [ ] Emotion modes are mutually exclusive: same voice, audio prompt, vector, or text prompt.
-- [ ] Text emotion mode can use the line text when no explicit emotion text is supplied.
-- [ ] Emotion vector total is blocked above `0.8` in UI and still validated in backend.
-- [ ] Payload includes inference parameters and acceleration toggles supported by the worker boundary.
+- [x] Page requires a speaker from upload or Voice Library.
+- [x] Emotion modes are mutually exclusive: same voice, audio prompt, vector, or text prompt.
+- [x] Text emotion mode can use the line text when no explicit emotion text is supplied.
+- [x] Emotion vector total is blocked above `0.8` in UI and still validated in backend.
+- [x] Payload includes inference parameters and acceleration toggles supported by the worker boundary.
 
 **Verification:**
-- [ ] Add frontend payload/type checks.
-- [ ] Add backend tests for emotion source validation and worker payload.
-- [ ] Run `npm.cmd run typecheck`.
-- [ ] Run `.\.venv\Scripts\python.exe -m pytest tests\test_voxcpm_app_indextts2_service.py --basetemp data\pytest-tmp`.
+- [x] Add frontend payload/type checks.
+- [x] Add backend tests for emotion source validation and worker payload.
+- [x] Run `npm.cmd run typecheck`.
+- [x] Run `.\.venv\Scripts\python.exe -m pytest tests\test_voxcpm_app_indextts2_service.py --basetemp data\pytest-tmp`.
 
 **Dependencies:** Task 1
 
@@ -256,13 +259,13 @@ See [Phase 1/2 Runtime and UI Implementation Notes](../technical/phase-1-2-runti
 **Description:** Make model readiness and path diagnostics visible in the AppShell Settings or runtime status area.
 
 **Acceptance criteria:**
-- [ ] Settings shows VoxCPM2 and IndexTTS2 status from `/runtime-backends`.
-- [ ] Missing runtime/checkpoint messages are readable and actionable.
-- [ ] Active job and busy backend are visible.
-- [ ] Renderer does not implement its own GPU safety logic.
+- [x] Settings shows VoxCPM2 and IndexTTS2 status from `/runtime-backends`.
+- [x] Missing runtime/checkpoint messages are readable and actionable.
+- [x] Active job and busy backend are visible.
+- [x] Renderer does not implement its own GPU safety logic.
 
 **Verification:**
-- [ ] Run `npm.cmd run typecheck`.
+- [x] Run `npm.cmd run typecheck`.
 - [ ] Manual check with IndexTTS2 checkpoints absent.
 - [ ] Manual check while a fake long-running job holds the runtime lease, if available.
 
@@ -278,10 +281,10 @@ See [Phase 1/2 Runtime and UI Implementation Notes](../technical/phase-1-2-runti
 
 ### Checkpoint: Parameterized Workbenches
 
-- [ ] VoxCPM2 page sends mode-appropriate parameters.
-- [ ] IndexTTS2 page sends exactly one emotion source.
-- [ ] Settings reports model readiness without attempting generation.
-- [ ] Frontend typecheck passes.
+- [x] VoxCPM2 page sends mode-appropriate parameters.
+- [x] IndexTTS2 page sends exactly one emotion source.
+- [x] Settings reports model readiness without attempting generation.
+- [x] Frontend typecheck passes.
 
 ## Phase 3: Job and Take Product Loop
 
@@ -290,15 +293,15 @@ See [Phase 1/2 Runtime and UI Implementation Notes](../technical/phase-1-2-runti
 **Description:** Move synchronous generation routes toward a compatibility wrapper over job creation and immediate execution.
 
 **Acceptance criteria:**
-- [ ] `POST /generation-jobs` creates a queued job for `voxcpm2` or `indextts2`.
-- [ ] `GET /generation-jobs` lists current jobs.
-- [ ] `GET /generation-jobs/:job_id` returns one job.
-- [ ] Existing `/generate-audio` and `/indextts2/generate` still work.
-- [ ] Legacy routes pass `generation_job_id` into runtime lease state.
+- [x] `POST /generation-jobs` creates a queued job for `voxcpm2` or `indextts2`.
+- [x] `GET /generation-jobs` lists current jobs.
+- [x] `GET /generation-jobs/:job_id` returns one job.
+- [x] Existing `/generate-audio` and `/indextts2/generate` still work.
+- [x] Legacy routes pass `generation_job_id` into runtime lease state.
 
 **Verification:**
-- [ ] Add backend API tests for create/list/get.
-- [ ] Add compatibility tests for old routes.
+- [x] Add backend API tests for create/list/get.
+- [x] Add compatibility tests for old routes.
 - [ ] Run `.\.venv\Scripts\python.exe -m pytest tests --basetemp data\pytest-tmp`.
 
 **Dependencies:** Task 3
@@ -318,14 +321,14 @@ See [Phase 1/2 Runtime and UI Implementation Notes](../technical/phase-1-2-runti
 **Description:** Add additive SQLite schema support for reusable audio assets, generation jobs, and generation takes without breaking existing voices and generations.
 
 **Acceptance criteria:**
-- [ ] Empty database creates assets, generation_jobs, and generation_takes tables.
-- [ ] Existing database migration is additive.
-- [ ] Existing VoiceRecord and GenerationRecord shapes remain compatible.
-- [ ] A take can be created, listed, and selected.
+- [x] Empty database creates assets, generation_jobs, and generation_takes tables.
+- [x] Existing database migration is additive.
+- [x] Existing VoiceRecord and GenerationRecord shapes remain compatible.
+- [x] A take can be created, listed, and selected.
 
 **Verification:**
-- [ ] Add storage migration tests.
-- [ ] Run `.\.venv\Scripts\python.exe -m pytest tests\test_voxcpm_app_storage.py --basetemp data\pytest-tmp`.
+- [x] Add storage migration tests.
+- [x] Run `.\.venv\Scripts\python.exe -m pytest tests\test_voxcpm_app_storage.py --basetemp data\pytest-tmp`.
 
 **Dependencies:** Task 7 can start with current schema, but this task must finish before full multi-take UI.
 
@@ -343,16 +346,16 @@ See [Phase 1/2 Runtime and UI Implementation Notes](../technical/phase-1-2-runti
 **Description:** Let one line request create multiple IndexTTS2 takes, compare them, and select one for shared history.
 
 **Acceptance criteria:**
-- [ ] User can request more than one take for the same line.
-- [ ] Each take has independent output audio and status.
-- [ ] Selecting a take marks it as selected and projects it into shared history.
-- [ ] Failed takes preserve their error summaries without failing the entire job when other takes succeed.
+- [x] User can request more than one take for the same line.
+- [x] Each take has independent output audio and status.
+- [x] Selecting a take marks it as selected and projects it into shared history.
+- [x] Failed takes preserve their error summaries without failing the entire job when other takes succeed.
 
 **Verification:**
-- [ ] Add fake-runner tests for multiple takes.
-- [ ] Add API tests for take list and select.
-- [ ] Run Python tests with `--basetemp data\pytest-tmp`.
-- [ ] Run `npm.cmd run typecheck`.
+- [x] Add fake-runner tests for multiple takes.
+- [x] Add API tests for take list and select.
+- [x] Run Python tests with `--basetemp data\pytest-tmp`.
+- [x] Run `npm.cmd run typecheck`.
 
 **Dependencies:** Task 8
 
@@ -371,14 +374,14 @@ See [Phase 1/2 Runtime and UI Implementation Notes](../technical/phase-1-2-runti
 **Description:** Complete the loop from generated output to reusable voice and parameter reuse.
 
 **Acceptance criteria:**
-- [ ] Successful VoxCPM2 outputs can be saved as Voice Library entries.
-- [ ] Selected IndexTTS2 takes appear in History and can be replayed.
+- [x] Successful VoxCPM2 outputs can be saved as Voice Library entries.
+- [x] Selected IndexTTS2 takes appear in History and can be replayed.
 - [ ] History reuse restores backend id, mode, selected voice when available, text, control, and parameters.
 - [ ] Deleted voices do not break old history records.
 
 **Verification:**
-- [ ] Add service tests for generated-output voice save.
-- [ ] Run `npm.cmd run typecheck`.
+- [x] Add service tests for generated-output voice save.
+- [x] Run `npm.cmd run typecheck`.
 - [ ] Manual AppShell flow: generate, save voice, reuse voice, regenerate.
 
 **Dependencies:** Task 8, Task 9
@@ -396,10 +399,10 @@ See [Phase 1/2 Runtime and UI Implementation Notes](../technical/phase-1-2-runti
 
 ### Checkpoint: Job and Take Product Loop
 
-- [ ] Job API creates, lists, gets, and executes jobs.
-- [ ] IndexTTS2 multi-take generation works with fake runner.
-- [ ] Selected take appears in shared history.
-- [ ] Generated VoxCPM2 output can become an IndexTTS2 speaker through Voice Library.
+- [x] Job API creates, lists, gets, and executes jobs.
+- [x] IndexTTS2 multi-take generation works with fake runner.
+- [x] Selected take appears in shared history.
+- [x] Generated VoxCPM2 output can become an IndexTTS2 speaker through Voice Library.
 
 ## Phase 4: Real Model Acceptance
 
@@ -461,8 +464,8 @@ See [Phase 1/2 Runtime and UI Implementation Notes](../technical/phase-1-2-runti
 - [ ] Running cancellation is recorded even if hard interruption is not yet supported.
 
 **Verification:**
-- [ ] Add RuntimeCoordinator tests.
-- [ ] Add worker timeout tests.
+- [x] Add RuntimeCoordinator tests.
+- [x] Add worker timeout tests.
 - [ ] Manual concurrent AppShell request check.
 
 **Dependencies:** Task 7
@@ -490,14 +493,14 @@ See [Phase 1/2 Runtime and UI Implementation Notes](../technical/phase-1-2-runti
 **Description:** Keep implementation docs aligned with actual API, paths, runtime behavior, and testing commands.
 
 **Acceptance criteria:**
-- [ ] `docs/technical/models-runtime.md` lists actual status fields and paths.
-- [ ] `docs/technical/backend-api.md` lists implemented job, take, runtime, and compatibility routes.
-- [ ] `docs/technical/testing-acceptance.md` lists exact commands and manual smoke steps.
-- [ ] `docs/app-dev/06-implementation-roadmap.md` reflects completed and remaining milestones.
+- [x] `docs/technical/models-runtime.md` lists actual status fields and paths.
+- [x] `docs/technical/backend-api.md` lists implemented job, take, runtime, and compatibility routes.
+- [x] `docs/technical/testing-acceptance.md` lists exact commands and manual smoke steps.
+- [x] `docs/app-dev/06-implementation-roadmap.md` reflects completed and remaining milestones.
 
 **Verification:**
-- [ ] Review docs against route names and code paths.
-- [ ] Run `git diff --check`.
+- [x] Review docs against route names and code paths.
+- [x] Run `git diff --check`.
 
 **Dependencies:** Tasks 1-13
 
@@ -533,13 +536,13 @@ See [Phase 1/2 Runtime and UI Implementation Notes](../technical/phase-1-2-runti
 
 ### Checkpoint: Complete
 
-- [ ] All targeted Python tests pass with `--basetemp data\pytest-tmp`.
-- [ ] `npm.cmd run typecheck` passes.
-- [ ] `npm.cmd run build` passes.
-- [ ] `node --check electron\main.js` passes.
-- [ ] `node --check electron\preload.js` passes.
-- [ ] Real smoke test status is recorded.
-- [ ] Docs match implemented routes, payloads, paths, and product scope.
+- [x] All targeted Python tests pass with `--basetemp data\pytest-tmp`.
+- [x] `npm.cmd run typecheck` passes.
+- [x] `npm.cmd run build` passes.
+- [x] `node --check electron\main.js` passes.
+- [x] `node --check electron\preload.js` passes.
+- [x] Real smoke test status is recorded as not run.
+- [x] Docs match implemented routes, payloads, paths, and product scope.
 
 ## Parallel Execution Plan
 
@@ -563,16 +566,19 @@ Avoid parallel edits to the same files. If backend and frontend both need `share
 | Frontend enables invalid generation before backend is configured | Medium | Drive UI from `/runtime-backends`; backend remains final authority. |
 | Job/take schema breaks existing history | Medium | Use additive migrations and compatibility projection tests. |
 | Upstream API changes around VoxCPM2 seed or IndexTTS2 sampling | Medium | Only expose locally supported parameters; document deferred upstream-only fields. |
-| Multi-take flow becomes too large | Medium | First support sequential fake-runner multi-take, then real worker multi-take. |
+| Multi-take flow becomes too large | Medium | Keep the implemented sequential 1-5 take loop; validate the real worker before adding richer comparison UI. |
 | Real smoke tests are slow or hardware-dependent | Medium | Keep fake-runner tests as CI baseline and mark real tests as manual acceptance. |
 
 ## Open Questions
 
-- Should `generation-jobs` immediately execute by default, or should the renderer explicitly call a run action after creation?
-- Should failed takes be visible in History, or only in Job detail?
-- Should selected IndexTTS2 takes be saveable as reusable voices, or should only VoxCPM2 outputs become Voice Library entries by default?
 - Should running-job cancellation remain cooperative in MVP, or do we need hard subprocess termination before release?
 - Should VoxCPM2 denoiser stay disabled by default in AppShell for cache predictability, with an advanced toggle later?
+
+Resolved behavior as of 2026-08-07:
+
+- Creating a generation job enqueues it for immediate FIFO execution; there is no separate run action.
+- Failed takes remain in Jobs detail and are not projected to History.
+- Successful IndexTTS2 takes can be saved as reusable Voice Library entries.
 
 ## Deferred Work
 
@@ -583,4 +589,3 @@ Avoid parallel edits to the same files. If backend and frontend both need `share
 - Cloud sync and user accounts.
 - Model training, LoRA management, or model-level voice tuning.
 - Duration control for IndexTTS2 until upstream exposes a stable release path for it.
-- Phase 3 execution update (2026-07-02): this branch implements the multi-take job loop on top of the existing storage v2/job API baseline. IndexTTS2 queued jobs default to 3 takes, selected succeeded takes project into legacy History through `generation_takes.legacy_generation_id`, and Jobs UI can play/select/save take outputs. Runtime/checkpoint download and real smoke verification still require project-local assets.

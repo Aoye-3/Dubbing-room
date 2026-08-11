@@ -2,7 +2,7 @@
 
 This documentation describes VoxCPM-Box application-layer development on top of the current VoxCPM project. It intentionally avoids model internals and focuses on desktop app behavior, local data, user workflows, app adapters/services, and implementation boundaries.
 
-下一阶段产品方向是双模型 AppShell：通过共享本地存储后端连接 VoxCPM2 与 IndexTTS2。VoxCPM2 负责声音资产和通用生产，IndexTTS2 负责台词级情绪和表演精修。
+当前产品架构是双模型 AppShell：通过共享本地存储后端连接 VoxCPM2 与 IndexTTS2。VoxCPM2 负责声音资产和通用生产，IndexTTS2 负责台词级情绪和表演精修。
 
 ## Current App-Layer State
 
@@ -14,9 +14,10 @@ This documentation describes VoxCPM-Box application-layer development on top of 
 - A local app storage layer now exists under `src/voxcpm_app/` for Voice Library and Generation History metadata.
 - The Electron AppShell reads Voice Library and History records through IPC-backed app service calls.
 - Native save-voice actions, generation execution, and history recording now run through the AppShell backend.
-- IndexTTS2 now has an AppShell 表演台, Electron IPC bridge, `/indextts2/generate` backend route, fake-runner tests, and a `third_party/index-tts/` source snapshot. Real inference still requires project-local runtime and checkpoints.
+- IndexTTS2 now has an AppShell 表演台, Electron IPC bridge, synchronous and queued backend routes, multi-take fake-runner tests, and a `third_party/index-tts/` source snapshot. The project-local runtime and documented checkpoint inventory are present; real inference acceptance is still unrecorded.
+- Additive storage v4, the FIFO job queue, take selection/History projection, History Trash/favorites, generation-to-voice promotion, and the safe update page are implemented.
 - VoxCPM-Box targets ordinary-user voiceover workflows while preserving upstream source behavior.
-- 双模型集成 PRD 定义 Phase 5 之后的方向：通用存储后端、VoxCPM2 生产台、IndexTTS2 表演台。
+- 双模型集成 PRD 定义通用存储后端、VoxCPM2 生产台和 IndexTTS2 表演台；当前基础闭环已实现，真实模型验收和发布硬化仍在后续阶段。
 
 ## First Scope
 
@@ -88,5 +89,6 @@ The SQLite database stores metadata. Audio files stay on disk and are referenced
 2. Phase 2: Electron React app shell with native app-mode pages.
 3. Phase 3: Storage layer and SQLite schema.
 4. Phase 4: App service integration for Voice Library and History.
-5. Phase 5: Tests, migration checks, and packaging preparation.
-6. Phase 6: 双模型 AppShell 架构，包括通用存储、VoxCPM2 生产台和 IndexTTS2 表演精修。
+5. Phase 5: Native Voice Library, History, Jobs, Settings, update, and workflow integration.
+6. Phase 6: Script breakdown, multi-segment batch tasks, and role profiles.
+7. Phase 7: Tests, upstream-sync checks, and packaging preparation.

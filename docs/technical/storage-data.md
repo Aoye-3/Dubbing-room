@@ -1,6 +1,6 @@
 # 存储与数据模型
 
-## 当前存储 v1
+## 当前存储版本
 
 当前 SQLite 表：
 
@@ -8,7 +8,12 @@
 schema_version
 voices
 generations
+assets
+generation_jobs
+generation_takes
 ```
+
+当前 schema version 为 v4。迁移采用 additive 方式：保留 `voices` / `generations` 兼容表，新增 job/take/asset 表和 History/Voice linkage 字段。
 
 当前本地文件目录：
 
@@ -20,24 +25,22 @@ data/app/tmp/
 
 ## 当前能力
 
-v1 可支持：
-
 - Voice Library。
-- Generation History。
-- VoxCPM2 单输出生成。
-- IndexTTS2 单 take 生成。
-- 保存生成结果为 voice。
-- 软删除 voices / generations。
+- Generation History 收藏、回收站、恢复、永久清理和隐藏已提升记录。
+- VoxCPM2 单输出同步生成。
+- VoxCPM2 / IndexTTS2 queued job。
+- IndexTTS2 多 take、每个 take 的独立状态/错误和 selected take History 投影。
+- job cancel/retry 基础语义。
+- 生成结果或成功 take 保存为 voice。
+- soft-delete voices / generations。
+- `params_json` 保存 job/take 参数快照。
 
-v1 不适合：
+当前限制：
 
-- 通用资产管理。
-- 多 take。
-- 异步 job。
-- job retry。
-- selected take。
-- 每个 take 的独立错误。
-- 结构化模型参数查询。
+- 还没有独立 Assets CRUD/import API；asset 由 job/take 服务间接创建和读取。
+- queue 进程重启恢复、running job 硬取消和跨进程协调尚未实现。
+- History 的 legacy projection 仍是用户界面兼容面，不是完全 asset-native 的查询模型。
+- 没有通用音频去重和引用计数；永久删除仍依赖“voice 拥有独立复制文件”的安全边界。
 
 ## 兼容约束
 
@@ -57,7 +60,7 @@ v1 不适合：
 - 旧 API 继续返回旧字段。
 - 新数据镜像到旧 History 投影。
 
-## 目标 assets 表
+## 当前 assets 表
 
 ```text
 assets
@@ -68,7 +71,6 @@ assets
   mime_type TEXT NOT NULL
   duration_seconds REAL
   sample_rate INTEGER
-  source TEXT
   created_at TEXT NOT NULL
   deleted_at TEXT
 ```
@@ -81,7 +83,7 @@ assets
 - `take_output`
 - `uploaded`
 
-## 目标 generation_jobs 表
+## 当前 generation_jobs 表
 
 ```text
 generation_jobs
@@ -110,7 +112,7 @@ generation_jobs
 - `cancelled`
 - `deleted`
 
-## 目标 generation_takes 表
+## 当前 generation_takes 表
 
 ```text
 generation_takes
@@ -122,37 +124,20 @@ generation_takes
   status TEXT NOT NULL
   params_json TEXT NOT NULL
   output_asset_id TEXT
+  legacy_generation_id TEXT
   is_selected INTEGER NOT NULL DEFAULT 0
   error_summary TEXT NOT NULL DEFAULT ''
   created_at TEXT NOT NULL
   updated_at TEXT NOT NULL
 ```
 
-## 旧表兼容列
+## 旧表兼容策略
 
-建议给 `voices` 增加：
-
-```text
-asset_id TEXT
-```
-
-建议给 `generations` 增加：
-
-```text
-backend_id TEXT
-model_id TEXT
-mode TEXT
-params_json TEXT
-output_asset_id TEXT
-job_id TEXT
-selected_take_id TEXT
-```
-
-注意：
-
-- 不要给 `generations.backend_id` 设置默认 `voxcpm2`。
-- 旧记录读取时可以在应用层解释为 legacy VoxCPM2。
-- IndexTTS2 当前也会写旧 `generations`，默认值会误标。
+- `VoiceRecord` 和 `GenerationRecord` 的既有字段保持可读。
+- `generation_takes.legacy_generation_id` 连接 selected take 与兼容 History 投影。
+- `voices.source_generation_id`、`generations.saved_voice_id`、`promoted_to_voice_at` 和 `hidden_from_history_at` 记录生成结果提升为音色的双向关联。
+- `generations.source_backend` / `source_mode` 保存用户可理解的来源；旧记录使用安全默认值并按 legacy 数据处理。
+- 当前没有把 `asset_id` 直接加入 `voices`，也没有把 job/take 外键直接加入 `generations`；不要在文档中把这些延期字段当作已实现 schema。
 
 ## 数据流
 
@@ -199,7 +184,9 @@ user selects take:
 - 新 asset/job/take repository 可读写。
 - selected take 能投影到 legacy generation。
 
-- Phase 3 storage status (2026-07-02): storage v2 is active. `assets`, `generation_jobs`, and `generation_takes` are initialized additively. `generation_takes.legacy_generation_id` links the currently selected take to the legacy History projection. Failed takes stay in Jobs detail and are not projected to History. Selected take audio can be saved as a Voice Library entry by reusing the existing create-voice flow with `source: "take"`.
+## Job/take storage status (2026-08-07)
+
+Storage v2 引入的 `assets`、`generation_jobs` 和 `generation_takes` 继续在 v4 中使用。`generation_takes.legacy_generation_id` 连接当前 selected take 与兼容 History 投影。Failed take 留在 Jobs 详情中，不会投影到 History。成功 take 可通过既有 create-voice 流程以 `source: "take"` 保存到 Voice Library。
 
 ## Phase 4 history and voice-linkage storage status (2026-07-06)
 

@@ -18,19 +18,16 @@
 - Electron React AppShell 已存在，入口为 `electron/main.js` 和 `electron/renderer/src/app/App.tsx`。
 - 本地 Python App 后端已存在，Electron 通过 IPC 调用 `voxcpm_app.backend_server` 和 `voxcpm_app.service_cli`。
 - Voice Library、Generation History、VoxCPM2 生成、IndexTTS2 运行时状态、job/take 基础结构已经落地。
-- 现有路线文档记录：Phase 1/2 runtime/UI 已完成；Phase 3 job/take loop 已有基础实现，但真实模型 smoke 仍依赖项目本地 runtime/checkpoints。
+- 现有路线文档记录：Phase 1/2 runtime/UI 和 Phase 3 基础 job/take loop 已完成；真实模型 smoke、runtime hardening 和发布验收仍未完成。
 
-本次只读检查 `data/app/app.sqlite3` 的实际状态：
+当前 schema 结构：
 
 ```text
 tables = assets, generation_jobs, generation_takes, generations, schema_version, voices
-assets = 0
-generation_jobs = 0
-generation_takes = 0
-generations = 9
-voices = 0
-schema_version = 1, 2, 3
+schema_version = 1, 2, 3, 4
 ```
+
+不要在技术文档中记录本地用户库的行数；这些数字会随生成、清理和测试变化。进度判断以 schema、API、自动化覆盖和明确的 smoke 记录为准。
 
 ## 当前存储体系
 

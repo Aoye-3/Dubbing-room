@@ -244,8 +244,9 @@ Voicebox 是非自回归 flow-matching 语音生成模型，可做零样本 TTS�
 
 - `.venv` 在 `data/runtimes/indextts2/.venv`。
 - HF cache 在项目目录内。
-- `uv run tools/gpu_check.py` 通过。
+- `scripts/prepare_indextts2_runtime.ps1` 设置的 runtime/cache 路径全部位于当前项目驱动器。
 - `/runtime-backends` 显示 IndexTTS2 configured。
+- 至少一次真实 IndexTTS2 smoke generation 成功并记录硬件、device 和输出路径。
 
 ### FR3：IndexTTS2 参数真实性
 

@@ -106,26 +106,29 @@ Later iterations:
 Current AppShell integration:
 
 - Voice Library and History read local records through Electron IPC and `voxcpm_app.service_cli`.
-- Voice Design, Voice Cloning, Ultimate Cloning, LoRA Training, and LoRA Inference expose native interface placeholders and typed adapter names.
-- Native generation execution and LoRA training are not started from AppShell yet.
+- Voice Design, Voice Cloning, Ultimate Cloning, and IndexTTS2 expose native generation workbenches connected to the Python App backend.
+- Jobs provides queued status, retry/cancel controls, take playback/selection, and save-as-voice.
+- History provides favorites, Trash, restore, permanent purge, export, and promotion-to-voice.
+- LoRA Training and LoRA Inference remain native interface placeholders and are not started from AppShell.
 
 ## Voice Library Page
 
-The first native page should support the product shape before persistence exists:
+The native page currently supports:
 
 - Import Voice action.
 - Create Voice action.
 - Voice cards with name, short notes, tags, selected state, and action buttons.
-- Future connection to `data/app/app.sqlite3` and `data/app/voices/`.
+- Persistence through `data/app/app.sqlite3` and copied audio under `data/app/voices/`.
 
 Persistence requirements are defined in `03-data-design.md`.
 
 ## History Page
 
-The first native page should support the product shape before persistence exists:
+The native page currently supports:
 
 - Row list with voice name, language/model/duration metadata, text preview, created time, favorite action, and menu action.
-- Future connection to generation records and output files under `data/app/generations/`.
+- Generation records and output files under `data/app/generations/`.
+- History/Trash subviews, source/favorite/status filters, export, restore, permanent purge, and promotion to Voice Library.
 
 History requirements are defined in `01-product-prd.md` and `03-data-design.md`.
 

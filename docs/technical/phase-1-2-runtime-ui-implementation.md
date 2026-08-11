@@ -1,10 +1,10 @@
-# Phase 1/2 Runtime and UI Implementation Notes
+# Dual-Model Runtime, UI, and Job/Take Implementation Notes
 
-Status date: 2026-07-02
+Status date: 2026-08-07
 
-Branch: `codex/model-api-adapter-alignment`
+Baseline: current `main` functionality plus documentation maintenance branch
 
-This note records the current technical contract after Phase 1 and Phase 2 of
+This note records the current technical contract after Phase 1 through Phase 3 of
 the dual-model plan. It is intentionally implementation-facing: when the API,
 runtime, or renderer behavior changes, update this file together with
 `models-runtime.md`, `backend-api.md`, and `testing-acceptance.md`.
@@ -120,30 +120,38 @@ Required checkpoint assets:
 - `hf_cache/bigvgan/bigvgan_generator.pt`
 - `hf_cache/w2v-bert-2.0`
 
-Renderer and worker payload fields now include:
+Renderer `IndexTTS2Payload` fields now include:
 
 - `text`
-- `reference_audio`
+- `speaker`
 - `emotion_mode`
 - `emotion_audio`
-- `emotion_alpha`
-- `emotion_vector`
+- `emo_alpha`
+- `emo_vector`
+- `use_emo_text`
 - `emo_text`
-- `emo_random`
+- `use_random`
 - `interval_silence`
+- `max_text_tokens_per_segment`
 - `do_sample`
 - `top_p`
 - `top_k`
 - `temperature`
+- `length_penalty`
+- `num_beams`
 - `repetition_penalty`
 - `max_mel_tokens`
-- `seed`
 - `use_fp16`
 - `use_cuda_kernel`
 - `use_deepspeed`
 - `use_accel`
 - `use_torch_compile`
-- `generation_job_id`
+- `take_count`
+
+Before invoking the worker, the service resolves `speaker` and `emotion_audio`
+to project-local paths and normalizes them as `spk_audio_prompt` and
+`emo_audio_prompt`. Job execution supplies its id through the service/runtime
+boundary rather than as a renderer `IndexTTS2Payload` field.
 
 Text emotion mode no longer requires explicit `emo_text`. Vector emotion mode
 is blocked when the sum of vector values exceeds `0.8`, matching IndexTTS2's
@@ -205,6 +213,45 @@ The VoxCPM2 workbench exposes length bounds and bad-case retry controls. The
 IndexTTS2 workbench exposes acceleration toggles and validates emotion vector
 total before generation or queue submission.
 
+`main.tsx` now only mounts `App`. Domain pages and shared behavior live under
+`app/`, `shared/`, `voxcpm/`, `indextts2/`, `jobs/`, `storage/`, and `updates/`.
+
+Both model workbenches disable generation while their runtime is unconfigured or
+globally busy. They share `GenerationResultPanel` for playback, export, and
+save-as-voice presentation while keeping generation and persistence side effects
+in the owning page.
+
+## Phase 3 Job/Take Contract
+
+Implemented HTTP surface:
+
+```text
+POST /generation-jobs
+GET  /generation-jobs
+GET  /generation-jobs/:job_id
+POST /generation-jobs/:job_id/cancel
+POST /generation-jobs/:job_id/retry
+GET  /generation-jobs/:job_id/takes
+POST /generation-takes/:take_id/select
+```
+
+Current behavior:
+
+- The backend owns an in-process FIFO queue.
+- VoxCPM2 queued jobs produce one output asset and a compatibility History record.
+- IndexTTS2 jobs create 1-5 takes, default 3, and execute them sequentially.
+- Successful takes expose `output_asset` in API responses for playback.
+- The first successful take is projected to History; selecting another successful
+  take updates the projection idempotently.
+- A failed take cannot be selected and remains visible only in Jobs detail.
+- A successful take can be copied into Voice Library with `source: "take"`.
+- queued jobs can be cancelled; cancelling a running job only records
+  `cancel requested` and does not interrupt current inference.
+- retry creates a new job from the previous backend, mode, voice, and params.
+
+The Jobs renderer polls jobs and takes every 3 seconds and exposes cancel, retry,
+playback, select, and save-as-voice actions.
+
 ## Latest Verification
 
 Local verification completed after Phase 1/2 implementation:
@@ -215,22 +262,30 @@ npm.cmd run typecheck
 npm.cmd run build
 node --check electron\main.js
 node --check electron\preload.js
+node --check electron\dev-runner.js
 git diff --check
 ```
 
 Result:
 
-- Python tests: 37 passed.
+- Python tests: 45 passed in 10.01s.
 - TypeScript typecheck: passed.
-- Renderer build: passed.
+- Renderer build: passed; 1717 modules transformed.
 - Electron syntax checks: passed.
-- Diff whitespace check: passed, with pre-existing CRLF warnings only.
+- Diff whitespace check: passed; working-tree CRLF warnings remain informational.
+
+Resource inventory on 2026-08-07 found the project-local IndexTTS2 runtime Python
+and all checkpoint files/directories listed in `models-runtime.md`. No real model
+inference was run as part of this verification.
 
 ## Remaining Technical Gaps
 
 - Renderer tests for runtime status cards and IndexTTS2 validation states.
 - Electron IPC integration tests for structured backend errors.
+- Desktop E2E for generation, Jobs, History, Trash, export, and save-as-voice.
 - Real-model smoke tests against project-local VoxCPM2 and IndexTTS2 runtimes.
 - Cross-process runtime locking if multiple backend server processes are allowed.
 - Hard cancellation for already-running subprocess/model generation.
+- Real runtime load/unload/free and CUDA cache cleanup.
 - Typed renderer handling for backend `code` and `details`.
+- Recovery semantics for queued/running jobs after backend restart.

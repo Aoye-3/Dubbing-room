@@ -28,11 +28,13 @@ electron/renderer/src/vite-env.d.ts
 - `loraInference`
 - `library`
 - `history`
+- `jobs`
+- `updates`
 - `settings`
 
 ## IndexTTS2Page 当前能力
 
-当前页面直接定义在 `main.tsx`。
+当前页面定义在 `electron/renderer/src/indextts2/IndexTTS2Page.tsx`，`main.tsx` 只负责挂载 `App`。
 
 能力：
 
@@ -51,50 +53,49 @@ electron/renderer/src/vite-env.d.ts
 - `interval_silence`。
 - `max_text_tokens_per_segment`。
 - advanced sampling。
-- 生成后播放输出。
+- 根据 runtime `configured` / `busy` 状态禁用生成。
+- 同步生成后播放、导出和保存为 Voice Library 音色。
+- 提交 1-5 个 take 的 queued job。
 
 当前缺口：
 
-- 未根据 `runtime.configured` 禁用生成。
-- 没有 job status。
-- 没有 take comparison。
-- 没有日志或 warning 展示。
+- 多 take 比较目前位于独立 Jobs 页，还不是表演台内的并排对比面板。
+- structured backend `code` / `details` 没有保留为 typed UI error。
+- 没有 structured logs 或 warning 详情展示。
 - 没有前端测试。
-- 页面和 helper 都在 `main.tsx`。
 
-## 目标目录结构
+## 当前目录结构
 
 ```text
 electron/renderer/src/
   app/
     App.tsx
-    navigation.ts
-    shell-state.ts
+    AppShell.tsx
+    navigation.tsx
+    routes.tsx
   shared/
     api/
-    components/
-    media.ts
+      client.ts
+    audio.ts
+    components.tsx
+    GenerationResultPanel.tsx
+    useGenerationAudioExport.ts
     types.ts
   storage/
     VoiceLibraryPage.tsx
     HistoryPage.tsx
-    AssetsPage.tsx
+    EmptyState.tsx
   voxcpm/
-    VoxCPMStudioPage.tsx
-    GenerationPanel.tsx
+    VoxCPMPage.tsx
   indextts2/
     IndexTTS2Page.tsx
-    LineEditorPanel.tsx
-    SpeakerReferencePanel.tsx
-    EmotionControlPanel.tsx
-    AdvancedSamplingPanel.tsx
-    TakeComparisonPanel.tsx
-    RuntimeStatusCard.tsx
   jobs/
-    JobQueuePage.tsx
-    JobStatusBadge.tsx
-    TakeCard.tsx
+    JobListPage.tsx
+  updates/
+    UpdatePage.tsx
 ```
+
+IndexTTS2 的细分表演控件和 take comparison 仍可在交互复杂度继续增长时拆分；当前不为单次使用提前增加组件层级。
 
 ## 目标交互
 
@@ -146,28 +147,24 @@ electron/renderer/src/
 
 ## API 类型
 
-当前类型在：
-
-```text
-electron/renderer/src/vite-env.d.ts
-```
-
-下一步建议拆到：
+当前共享类型在：
 
 ```text
 electron/renderer/src/shared/types.ts
-electron/renderer/src/shared/api/types.ts
 ```
 
-新增类型：
+`vite-env.d.ts` 只声明 `window.voxcpmShell` bridge，并引用共享类型。
 
-- `RuntimeBackendStatus`
-- `GenerationJob`
-- `GenerationTake`
-- `AudioAsset`
-- `BackendId`
-- `JobStatus`
-- `TakeStatus`
+当前类型包括：
+
+- `RuntimeBackendStatus`。
+- `GenerationJob`。
+- `GenerationTake`，内嵌可播放的 `output_asset` 摘要。
+- `AppVoice` / `AppGeneration`。
+- `GenerateAudioPayload` / `IndexTTS2Payload`。
+- 安全更新相关类型。
+
+job/take status 当前仍使用 `string`，尚未收紧为枚举联合类型；独立通用 `AudioAsset` 类型也尚未暴露。
 
 ## 验收
 
@@ -176,6 +173,7 @@ electron/renderer/src/shared/api/types.ts
 - IndexTTS2 页面行为不回退。
 - `main.tsx` 不再承载新增复杂面板。
 - runtime missing / busy / failed 均有可读 UI。
+- Jobs 页可轮询任务、取消 queued job、重试、播放/选择 take，并保存成功 take 为音色。
 
 
 ## Phase 4 production result and History UI status (2026-07-06)

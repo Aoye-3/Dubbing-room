@@ -14,10 +14,20 @@ src/voxcpm_app/backend_server.py
 GET  /health
 GET  /runtime-backends
 GET  /media?path=...
+GET  /generation-jobs
+GET  /generation-jobs/:job_id
+GET  /generation-jobs/:job_id/takes
 POST /app-service
 POST /generate-audio
 POST /indextts2/generate
+POST /generation-jobs
+POST /generation-jobs/:job_id/cancel
+POST /generation-jobs/:job_id/retry
+POST /generation-takes/:take_id/select
+POST /runtime-backends/:backend_id/unload
 ```
+
+`POST /runtime-backends/:backend_id/unload` 当前只返回兼容响应 `unloaded: false`，尚未执行真实模型卸载。
 
 ## 当前 app-service actions
 
@@ -33,6 +43,10 @@ POST /indextts2/generate
 - `mark-generation-succeeded`
 - `mark-generation-failed`
 - `delete-generation`
+- `restore-generation`
+- `update-generation-favorite`
+- `purge-generations`
+- `promote-generation-to-voice`
 
 ## 当前生成接口
 
@@ -72,48 +86,23 @@ IndexTTS2Service.generate(payload)
 GenerationRecord
 ```
 
-## 当前问题
+## 当前限制与延期接口
 
-- 生成接口同步等待模型完成。
-- 没有 queue API。
-- 没有 job status API。
-- 没有 cancel/retry。
-- 没有 structured logs。
-- VoxCPM2 runtime status 是静态对象，不是 adapter 状态。
-- IndexTTS2 失败写入 generation，但前端不一定能很好区分配置失败、参数失败、runtime busy。
+- `/generate-audio` 和 `/indextts2/generate` 仍同步等待模型完成；job API 是并行保留的产品入口。
+- queue 只存在于当前 Python backend 进程，重启后不会恢复旧 queued/running 工作。
+- queued job 可以取消；running job 只写入 `cancel requested`，不会强制中断模型或子进程。
+- retry 会创建一个新 job，不会原地复用原 job id。
+- 尚无 structured logs 查询接口。
+- Electron 当前把非 2xx 响应压缩成普通 `Error(message)`；`code` 和 `details` 尚未保留为前端类型。
+- runtime load/free 和真实 unload 尚未实现。
+- 独立 Assets CRUD/import API、追加 take API 尚未实现；当前 assets 通过 job/take 和 Voice Library 服务间接管理。
 
-## 目标 API
-
-### Runtime
+延期接口：
 
 ```text
-GET  /runtime-backends
-POST /runtime-backends/:backend_id/unload
 POST /runtime-backends/:backend_id/load
 POST /runtime/free
-```
-
-### Jobs
-
-```text
-POST /generation-jobs
-GET  /generation-jobs
-GET  /generation-jobs/:job_id
-POST /generation-jobs/:job_id/cancel
-POST /generation-jobs/:job_id/retry
-```
-
-### Takes
-
-```text
-GET  /generation-jobs/:job_id/takes
-POST /generation-takes/:take_id/select
 POST /generation-jobs/:job_id/takes
-```
-
-### Assets
-
-```text
 GET  /assets
 GET  /assets/:asset_id
 POST /assets/import
@@ -136,7 +125,7 @@ IndexTTS2BackendAdapter
 
 ## 错误格式
 
-建议统一错误：
+当前统一错误：
 
 ```json
 {
@@ -182,7 +171,17 @@ sync route -> create job -> run immediately -> return legacy GenerationRecord
 - 后端所有错误返回 JSON。
 - Electron main 对超时和非 2xx 有清晰错误。
 
-- Phase 3 API status (2026-07-02): `generation-jobs` create/list/get/cancel/retry, `generation-jobs/:job_id/takes`, and `generation-takes/:take_id/select` are implemented. Take list responses include `output_asset` for playback. IndexTTS2 queued jobs support `params.take_count` clamped to 1-5 with default 3. Appending takes after job creation, hard cancellation, and real runtime load/free/unload remain deferred.
+## Job/take API status (2026-08-07)
+
+`generation-jobs` create/list/get/cancel/retry、`generation-jobs/:job_id/takes` 和 `generation-takes/:take_id/select` 已实现。Take 列表响应包含用于播放的 `output_asset`。IndexTTS2 queued job 支持 `params.take_count`，范围限制为 1-5，默认值为 3。
+
+当前语义：
+
+- queued cancel 将 job 标记为 `cancelled`，worker 取出后会跳过。
+- running cancel 仅写入 `cancel requested`，不会中断正在执行的模型。
+- retry 从旧 job 的 backend、mode、voice 和 params 创建新 job。
+- 选择 failed take 会被拒绝；选择 succeeded take 会更新唯一 selected take 并投影到兼容 History。
+- job/take 自动化覆盖使用 fake synthesizer/runner；真实模型验收仍未记录。
 
 ## Phase 4 history and voice-linkage API status (2026-07-06)
 

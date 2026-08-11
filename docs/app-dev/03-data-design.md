@@ -75,7 +75,7 @@ deleted
 
 ## Dual-Model Storage Direction
 
-当前 `voices` 和 `generations` 表仍是第一版实现。下一版 schema 应在不破坏旧记录的前提下增加通用存储概念。
+当前 additive storage v4 已在不破坏 `voices` 和 `generations` 兼容记录的前提下加入 `assets`、`generation_jobs` 和 `generation_takes`。本节保留产品字段意图；精确的当前 SQL schema、兼容字段和投影规则以 [`../technical/storage-data.md`](../technical/storage-data.md) 为准。
 
 ### `assets`
 
@@ -129,15 +129,7 @@ deleted
 | `is_selected` | INTEGER NOT NULL DEFAULT 0 | Chosen take flag |
 | `created_at` | TEXT NOT NULL | ISO 8601 UTC |
 
-兼容阶段可以先在 `generations` 上添加字段：
-
-- `backend_id`
-- `model_id`
-- `mode`
-- `params_json`
-- `output_asset_id`
-
-没有这些字段的旧记录应解释为 VoxCPM2 generation rows。
+当前兼容实现没有把 job/take 外键直接加入 `generations`。`generation_takes.legacy_generation_id` 连接 selected take 与 History 投影，`generations.source_backend` / `source_mode` 记录产品来源；旧记录继续按 legacy generation 读取。
 
 ## File Naming
 

@@ -61,8 +61,10 @@ Required scenarios:
 Recommended verification command:
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest tests\test_voxcpm_app_storage.py tests\test_voxcpm_app_service_cli.py tests\test_voxcpm_app_generation_service.py --basetemp data\app\pytest-tmp
+.\.venv\Scripts\python.exe -m pytest tests\test_voxcpm_app_storage.py tests\test_voxcpm_app_service_cli.py tests\test_voxcpm_app_generation_service.py tests\test_voxcpm_app_indextts2_service.py -q --basetemp data\pytest-tmp
 ```
+
+2026-08-07 baseline: 45 targeted Python tests passed. Storage migration, job/take execution, selected-take projection, runtime status, worker timeout/error handling, History Trash/favorites, and generation-to-voice linkage now have service-level coverage. Renderer, Electron IPC, desktop E2E, and real-model smoke coverage remain open; see [`../technical/testing-acceptance.md`](../technical/testing-acceptance.md).
 
 ## Regression Tests
 

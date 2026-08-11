@@ -120,6 +120,7 @@ npm.cmd run typecheck
 npm.cmd run build
 node --check electron\main.js
 node --check electron\preload.js
+node --check electron\dev-runner.js
 .venv\Scripts\python.exe -m pytest tests\test_voxcpm_app_storage.py tests\test_voxcpm_app_service_cli.py tests\test_voxcpm_app_generation_service.py tests\test_voxcpm_app_indextts2_service.py -q --basetemp data\pytest-tmp
 ```
 

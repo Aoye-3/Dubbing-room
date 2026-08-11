@@ -2,6 +2,8 @@
 
 ## Phase 1: Documentation and Conventions
 
+Current status: implemented; this documentation set and ADRs define the current paths, data boundaries, and upstream-preservation rules. Ongoing maintenance is still required when implementation changes.
+
 Inputs:
 
 - Current `app.py` Gradio UI.
@@ -63,7 +65,7 @@ Acceptance:
 
 ## Phase 4: App Service Integration
 
-Current status: first minimal loop implemented. The AppShell starts a local Python backend, imports uploaded voices, generates audio with uploaded or saved voices, stores generated outputs, saves generated output as a voice, and refreshes Voice Library and History through IPC-backed backend calls.
+Current status: implemented beyond the first minimal loop. The AppShell starts a local Python backend, imports uploaded voices, generates audio with uploaded or saved voices, stores generated outputs, saves generated output as a voice, and refreshes Voice Library and History through IPC-backed backend calls. History now includes favorites, Trash, restore, permanent purge, export, and promotion-to-voice linkage.
 
 Tasks:
 
@@ -81,6 +83,8 @@ Acceptance:
 
 ## Phase 5: Native Shell Feature Integration
 
+Current status: partially implemented. Voice Library, History, Jobs, Settings runtime cards, result export, and the safe GitHub update page are connected. Settings cleanup controls, richer narration/dubbing workflows, and release-grade UX remain incomplete.
+
 Tasks:
 
 - Connect the Voice Library page to app services.
@@ -96,6 +100,8 @@ Acceptance:
 - Settings shows runtime and local dependency status without exposing model internals.
 
 ## Phase 6: Script, Batch, and Role Workflows
+
+Current status: not started as product workflows. The existing FIFO generation queue is a backend primitive and does not yet provide script breakdown, multi-segment batch orchestration, or role profiles.
 
 Tasks:
 
@@ -113,6 +119,8 @@ Acceptance:
 
 ## Phase 7: Tests, Upstream Sync, and Packaging Preparation
 
+Current status: partially implemented. Storage/service/job/take automation, typecheck, renderer build, Electron syntax checks, update runbook, and packaging considerations exist. Renderer/IPC/E2E automation, real-model smoke records, and distributable desktop packaging remain open.
+
 Tasks:
 
 - Add storage-layer tests.
@@ -127,13 +135,11 @@ Acceptance:
 - Upstream pull verification confirms both preserved source behavior and AppShell startup.
 - Packaging notes list Python runtime, Electron files, local FFmpeg, SQLite data location, and model cache considerations.
 
-## Current Dual-Model Phase 1/2 Status
+## Current Dual-Model Implementation Status
 
-Status date: 2026-07-02
+Status date: 2026-08-07
 
-The Phase 1 runtime readiness work and Phase 2 parameterized workbench work from
-`docs/Plan/11-dual-model-execution-plan.md` are implemented on branch
-`codex/model-api-adapter-alignment`.
+Phase 1 runtime readiness, Phase 2 parameterized workbenches, and the basic Phase 3 job/take product loop from `docs/Plan/11-dual-model-execution-plan.md` are implemented in the current code baseline.
 
 Implemented:
 
@@ -146,18 +152,24 @@ Implemented:
   acceleration toggles.
 - Settings renders runtime readiness cards for VoxCPM2 and IndexTTS2.
 - VoxCPM2 and IndexTTS2 pages expose the implemented Phase 2 controls.
+- Additive storage provides `assets`, `generation_jobs`, and `generation_takes` while preserving legacy Voice Library and History records.
+- Generation job APIs provide create/list/get, queued cancel, retry, and take list/select operations.
+- IndexTTS2 queued jobs create 1-5 takes, project a selected successful take to History, and expose playback assets.
+- Generated outputs and successful takes can be copied into Voice Library for reuse.
+- History supports favorites, Trash, restore, permanent purge, export, and promotion-to-voice linkage.
 
 Verified:
 
-- Python targeted tests: 37 passed.
+- Python targeted tests: 45 passed in 10.01s.
 - TypeScript typecheck: passed.
-- Renderer build: passed.
+- Renderer build: passed; 1717 modules transformed.
 - Electron syntax checks: passed.
-- Diff whitespace check: passed with CRLF warnings only.
+- Diff whitespace check: passed; working-tree CRLF warnings only.
+- IndexTTS2 project-local runtime Python and the documented checkpoint inventory are present.
 
 Next roadmap focus:
 
-- Phase 3 job/take product loop.
-- Renderer and Electron IPC tests for the new status/error surfaces.
-- Real-model smoke tests with project-local VoxCPM2 and IndexTTS2 assets.
-- Phase 3 job/take update (2026-07-02): storage v2 and the basic job API are implemented. The current Phase 3 branch adds IndexTTS2 multi-take queued execution, selected-take History projection, take playback payloads, and save-as-voice from selected take assets. Real model smoke remains dependent on project-local runtime/checkpoints.
+- Run and record real VoxCPM2 and IndexTTS2 smoke tests; resource presence alone is not inference acceptance.
+- Add Renderer, Electron IPC, and desktop E2E coverage for status/error and core user flows.
+- Define real unload/free, running cancellation, restart recovery, and cross-process runtime behavior.
+- Productize take comparison and decide whether Phase 6 workflows or desktop packaging comes next.

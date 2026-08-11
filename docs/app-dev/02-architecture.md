@@ -33,9 +33,9 @@ start_electron_shell.bat or start_electron_shell.vbs
       -> upstream source behavior through stable boundaries
 ```
 
-## Target First-Scope Architecture
+## Implemented First-Scope Architecture
 
-Add a React app shell and an application layer between the UI and file/database storage.
+The React app shell and application layer now sit between the UI and file/database storage.
 
 ```text
 Electron main process
@@ -65,9 +65,9 @@ Python app services
 
 The model-facing generation behavior should remain isolated behind the existing `VoxCPMDemo.generate_tts_audio(...)` call.
 
-## Target Dual-Model Architecture
+## Current Dual-Model Architecture
 
-下一阶段架构将 VoxCPM2 与 IndexTTS2 视为互补后端，并通过同一个应用存储层连接。
+当前基础架构将 VoxCPM2 与 IndexTTS2 视为互补后端，并通过同一个应用存储层和单进程 GPU lease 连接。真实 load/unload、跨进程锁和 real-model acceptance 仍属于后续硬化。
 
 ```text
 React renderer
@@ -103,9 +103,9 @@ Python app backend
 - VoxCPM2 Production Desk: 声音设计、声音克隆、极致克隆、通用旁白、保存音色和可复用声音资产。
 - IndexTTS2 Performance Desk: 台词行、选定角色音色、情绪控制、表演参数、多 take 对比和选定 take 提交。
 
-## Proposed Module Boundaries
+## Module Boundaries
 
-Recommended future modules:
+Current application modules and deferred workflow modules:
 
 ```text
 src/voxcpm_app/
@@ -132,34 +132,29 @@ Responsibilities:
 - `audio_assets.py`: file copy, checksum, duration, and path normalization.
 - `schemas.py`: typed request/response objects or dataclasses.
 
-Dual-model target modules:
+Current dual-model implementation modules:
 
 ```text
 src/voxcpm_app/
-  storage/
-    assets.py
-    jobs.py
-    takes.py
-  runtime/
-    coordinator.py
-    status.py
-  backends/
-    base.py
-    voxcpm2.py
-    indextts2.py
-  jobs/
-    queue.py
-    worker.py
+  runtime.py
+  generation_service.py
+  indextts2_service.py
+  indextts2_worker.py
+  job_queue.py
+  job_store.py
+  db.py
+  repositories.py
+  schemas.py
 ```
 
 职责：
 
-- `storage/`: 应用拥有的 assets、voices、jobs、takes、history 和 media paths。
-- `runtime/`: 后端 enabled 状态、GPU lease、load/unload 生命周期、busy 状态和 last error reporting。
-- `backends/`: 模型专属 adapters。adapter 负责把 app request 映射到模型调用，但不拥有 app storage。
-- `jobs/`: 队列化生成执行。长时间模型调用应迁移到这里，而不是直接阻塞 HTTP request handler。
+- `db.py` / `repositories.py` / `job_store.py`: 应用拥有的 assets、voices、jobs、takes、history 和 media paths。
+- `runtime.py`: 后端 enabled 状态、共享 GPU lease、busy 状态和 last error reporting；真实 load/unload 尚未实现。
+- `generation_service.py` / `indextts2_service.py`: 模型专属 adapters 和 app service boundary。
+- `job_queue.py`: 进程内 FIFO 队列化生成执行。
 
-Frontend target modules:
+Current frontend modules:
 
 ```text
 electron/renderer/src/
@@ -168,9 +163,11 @@ electron/renderer/src/
   storage/
   voxcpm/
   indextts2/
+  jobs/
+  updates/
 ```
 
-`electron/renderer/src/main.tsx` 应变成轻量 bootstrap entrypoint。新的 VoxCPM2 和 IndexTTS2 功能应放在 feature directories 下，不再继续扩张当前单文件 renderer。
+`electron/renderer/src/main.tsx` 已是轻量 bootstrap entrypoint。新的 VoxCPM2 和 IndexTTS2 功能继续放在 feature directories 下，不再扩张启动文件。
 
 ## Electron Boundary
 
