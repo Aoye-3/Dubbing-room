@@ -7,6 +7,7 @@
 - TypeScript。
 - Vite。
 - `lucide-react` icons。
+- Vitest、jsdom、React Testing Library。
 
 入口：
 
@@ -32,14 +33,18 @@ electron/renderer/src/vite-env.d.ts
 - `updates`
 - `settings`
 
-## IndexTTS2Page 当前能力
+## IndexTTS-2.5 Performance Desk 当前能力
 
 当前页面定义在 `electron/renderer/src/indextts2/IndexTTS2Page.tsx`，`main.tsx` 只负责挂载 `App`。
+
+`IndexTTS2Page` 负责表单状态和提交，`formMapper.ts` 是快速试听与多 Take 共用的唯一 payload 映射边界，`PerformanceDesk.tsx` 负责当前 job/take 状态和操作。
 
 能力：
 
 - 加载 runtime status。
 - 文本输入。
+- `ZH / EN / JA / ES / AR` 必选语言。
+- `duration_factor` 0.5-2.0。
 - speaker reference：
   - saved voice
   - uploaded audio
@@ -49,20 +54,20 @@ electron/renderer/src/vite-env.d.ts
   - vector
   - text prompt
 - `emo_alpha`。
-- `use_random`。
+- vector 模式条件显示 `use_random`。
 - `interval_silence`。
 - `max_text_tokens_per_segment`。
-- advanced sampling。
+- text normalization、分句和受控 sampling 专家区；不显示无效的 `do_sample`。
+- ZH Pinyin、EN CMU、JA Kana 的 `<source|pronunciation>` 标注插入；ES/AR 不显示未支持助手。
+- 文本情感实验/显存敏感提示，以及 runtime capability 禁用。
+- 参考音频最多使用前 15 秒的上游限制提示。
 - 根据 runtime `configured` / `busy` 状态禁用生成。
-- 同步生成后播放、导出和保存为 Voice Library 音色。
-- 提交 1-5 个 take 的 queued job。
+- “快速试听”和“生成多 Take”都调用 job API；前者提交一个 take。
+- 当前 job 的 bounded polling；terminal 状态后停止轮询，离页清理 timer。
+- take 状态、播放、参数、warnings/errors、选择、导出、保存为 Voice Library 和取消。
+- 选择成功 take 后可在 History 查看其 2.5 模型身份、语言、时长和 warnings。
 
-当前缺口：
-
-- 多 take 比较目前位于独立 Jobs 页，还不是表演台内的并排对比面板。
-- structured backend `code` / `details` 没有保留为 typed UI error。
-- 没有 structured logs 或 warning 详情展示。
-- 没有前端测试。
+仍保留全局 Jobs 页用于跨任务查看；Performance Desk 是当前创作任务的就地比较面。尚缺 structured logs 查询、原生 Electron IPC 集成测试和桌面 E2E。
 
 ## 当前目录结构
 
@@ -76,6 +81,7 @@ electron/renderer/src/
   shared/
     api/
       client.ts
+      errors.ts
     audio.ts
     components.tsx
     GenerationResultPanel.tsx
@@ -89,15 +95,17 @@ electron/renderer/src/
     VoxCPMPage.tsx
   indextts2/
     IndexTTS2Page.tsx
+    formMapper.ts
+    PerformanceDesk.tsx
   jobs/
     JobListPage.tsx
   updates/
     UpdatePage.tsx
 ```
 
-IndexTTS2 的细分表演控件和 take comparison 仍可在交互复杂度继续增长时拆分；当前不为单次使用提前增加组件层级。
+表单映射和 job desk 已按业务边界拆分；不要在同步兼容入口和 job 入口重新各自拼装 payload。
 
-## 目标交互
+## 当前交互边界
 
 ### 通用状态
 
@@ -120,7 +128,7 @@ IndexTTS2 的细分表演控件和 take comparison 仍可在交互复杂度继�
 
 ### IndexTTS2 表演台
 
-目标布局：
+当前布局：
 
 - 左侧：台词和 speaker。
 - 中间：情绪和参数。
@@ -137,13 +145,15 @@ IndexTTS2 的细分表演控件和 take comparison 仍可在交互复杂度继�
 
 ### 多 take UI
 
-应支持：
+已支持：
 
 - 每个 take 播放。
 - 显示 take 参数摘要。
 - 显示 status / error。
 - 标记 selected take。
 - 保存 selected take 为 voice。
+- 导出任意成功 take。
+- terminal job 停止轮询，action failure 显示结构化错误类别与消息。
 
 ## API 类型
 
@@ -161,7 +171,9 @@ electron/renderer/src/shared/types.ts
 - `GenerationJob`。
 - `GenerationTake`，内嵌可播放的 `output_asset` 摘要。
 - `AppVoice` / `AppGeneration`。
-- `GenerateAudioPayload` / `IndexTTS2Payload`。
+- `GenerateAudioPayload` / `IndexTTS25Payload`（`IndexTTS2Payload` 仅作为 deprecated alias）。
+- `IndexTTS2RuntimeProfile`。
+- model identity 与 structured warning 类型。
 - 安全更新相关类型。
 
 job/take status 当前仍使用 `string`，尚未收紧为枚举联合类型；独立通用 `AudioAsset` 类型也尚未暴露。
@@ -173,7 +185,8 @@ job/take status 当前仍使用 `string`，尚未收紧为枚举联合类型；�
 - IndexTTS2 页面行为不回退。
 - `main.tsx` 不再承载新增复杂面板。
 - runtime missing / busy / failed 均有可读 UI。
-- Jobs 页可轮询任务、取消 queued job、重试、播放/选择 take，并保存成功 take 为音色。
+- Jobs 页可轮询任务、取消 queued/running IndexTTS job、重试、播放/选择 take，并保存成功 take 为音色。
+- `npm.cmd test` 的 renderer mapper、字段显隐、Settings 保存、bounded polling、take action、History metadata 与 error 分类测试通过。
 
 
 ## Phase 4 production result and History UI status (2026-07-06)
@@ -202,7 +215,7 @@ The panel displays:
 Module result isolation:
 
 - `design`, `clone`, and `ultimate` still reuse `VoxCPMPage`, but routes pass distinct React `key` values so their local result state does not bleed across modes.
-- `IndexTTS2Page` uses the same shared result panel and supports saving the latest generated output as a voice.
+- `IndexTTS2Page` no longer keeps a separate synchronous-result panel as its primary flow. `PerformanceDesk` owns current job/take playback, selection, export, and save-as-voice actions; `/indextts2/generate` remains a backend compatibility route.
 - `GenerateAudioPayload.source_mode` is written by the renderer as one of `voice-design`, `voice-cloning`, or `ultimate-cloning`.
 - IndexTTS2 writes `source_mode: "indextts2-performance"` from the backend.
 

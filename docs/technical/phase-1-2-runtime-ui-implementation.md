@@ -1,5 +1,7 @@
 # Dual-Model Runtime, UI, and Job/Take Implementation Notes
 
+> Historical baseline: this document records the 2026-08-07 IndexTTS 2.0 implementation. Its IndexTTS runtime, API, frontend, storage, and test facts are superseded by [IndexTTS-2.5 Implementation Status](indextts25-implementation-status.md) and the current domain documents. Keep it for migration history; do not use it as the active 2.5 contract.
+
 Status date: 2026-08-07
 
 Baseline: current `main` functionality plus documentation maintenance branch

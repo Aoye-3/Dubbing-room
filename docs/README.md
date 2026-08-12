@@ -6,7 +6,7 @@
 
 - [PRD Index](PRD/README.md)
 - [Technical Documentation Index](technical/README.md)
-- [Phase 1/2 Runtime and UI Implementation Notes](technical/phase-1-2-runtime-ui-implementation.md)
+- [Historical IndexTTS 2.0 Runtime and UI Implementation Notes](technical/phase-1-2-runtime-ui-implementation.md)
 - [App Development Docs](app-dev/README.md)
 - [Dual-Model AppShell Execution Plan](Plan/11-dual-model-execution-plan.md)
 - [IndexTTS-2.5 Replacement And Performance Desk Plan](Plan/12-indextts25-migration-plan.md)

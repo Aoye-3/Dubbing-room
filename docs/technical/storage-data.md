@@ -13,7 +13,7 @@ generation_jobs
 generation_takes
 ```
 
-当前 schema version 为 v4。迁移采用 additive 方式：保留 `voices` / `generations` 兼容表，新增 job/take/asset 表和 History/Voice linkage 字段。
+当前 schema version 为 v5。迁移采用 additive 方式：保留 `voices` / `generations` 兼容表和 v4 History/Voice linkage 字段，并为 generation/job/take 增加 nullable 模型身份与结构化 warnings。
 
 当前本地文件目录：
 
@@ -30,7 +30,8 @@ data/app/tmp/
 - VoxCPM2 单输出同步生成。
 - VoxCPM2 / IndexTTS2 queued job。
 - IndexTTS2 多 take、每个 take 的独立状态/错误和 selected take History 投影。
-- job cancel/retry 基础语义。
+- queued/running job cancel 和 retry 语义。
+- 2.0 legacy 记录保持 nullable 模型身份；新 IndexTTS job 写入准确的 2.5 identity。
 - 生成结果或成功 take 保存为 voice。
 - soft-delete voices / generations。
 - `params_json` 保存 job/take 参数快照。
@@ -38,7 +39,7 @@ data/app/tmp/
 当前限制：
 
 - 还没有独立 Assets CRUD/import API；asset 由 job/take 服务间接创建和读取。
-- queue 进程重启恢复、running job 硬取消和跨进程协调尚未实现。
+- queue 进程重启恢复和跨进程协调尚未实现。
 - History 的 legacy projection 仍是用户界面兼容面，不是完全 asset-native 的查询模型。
 - 没有通用音频去重和引用计数；永久删除仍依赖“voice 拥有独立复制文件”的安全边界。
 
@@ -90,6 +91,9 @@ generation_jobs
   id TEXT PRIMARY KEY
   backend_id TEXT NOT NULL
   model_id TEXT NOT NULL
+  model_version TEXT
+  upstream_commit TEXT
+  warnings_json TEXT
   mode TEXT NOT NULL
   status TEXT NOT NULL
   input_text TEXT NOT NULL
@@ -119,6 +123,10 @@ generation_takes
   id TEXT PRIMARY KEY
   job_id TEXT NOT NULL
   backend_id TEXT NOT NULL
+  model_id TEXT
+  model_version TEXT
+  upstream_commit TEXT
+  warnings_json TEXT
   take_index INTEGER NOT NULL
   label TEXT
   status TEXT NOT NULL
@@ -137,6 +145,8 @@ generation_takes
 - `generation_takes.legacy_generation_id` 连接 selected take 与兼容 History 投影。
 - `voices.source_generation_id`、`generations.saved_voice_id`、`promoted_to_voice_at` 和 `hidden_from_history_at` 记录生成结果提升为音色的双向关联。
 - `generations.source_backend` / `source_mode` 保存用户可理解的来源；旧记录使用安全默认值并按 legacy 数据处理。
+- `generations.model_id` / `model_version` / `upstream_commit` / `warnings_json` 在 v5 中为 nullable；旧记录不做破坏性回填。
+- 选择 take 时，其模型身份和 warnings 会复制到 job 与兼容 History generation。
 - 当前没有把 `asset_id` 直接加入 `voices`，也没有把 job/take 外键直接加入 `generations`；不要在文档中把这些延期字段当作已实现 schema。
 
 ## 数据流
@@ -165,10 +175,13 @@ generation output asset
 
 ```text
 create generation_job for one line
-for each take:
-  run IndexTTS2
+acquire one RuntimeCoordinator lease
+start one IndexTTS-2.5 worker and load once
+for each of 1-5 takes:
+  run inference through the same JSONL session
   create asset(kind=take_output)
-  create generation_take
+  update generation_take identity/warnings/status
+exit worker and release lease
 user selects take:
   mark selected
   mirror selected take to legacy generations
@@ -184,9 +197,15 @@ user selects take:
 - 新 asset/job/take repository 可读写。
 - selected take 能投影到 legacy generation。
 
-## Job/take storage status (2026-08-07)
+## Job/take storage status (2026-08-12)
 
-Storage v2 引入的 `assets`、`generation_jobs` 和 `generation_takes` 继续在 v4 中使用。`generation_takes.legacy_generation_id` 连接当前 selected take 与兼容 History 投影。Failed take 留在 Jobs 详情中，不会投影到 History。成功 take 可通过既有 create-voice 流程以 `source: "take"` 保存到 Voice Library。
+Storage v2 引入的 `assets`、`generation_jobs` 和 `generation_takes` 继续在 v5 中使用。`generation_takes.legacy_generation_id` 连接当前 selected take 与兼容 History 投影。Failed/cancelled take 留在 Jobs 或 Performance Desk，不会投影到 History。成功 take 可通过既有 create-voice 流程以 `source: "take"` 保存到 Voice Library。
+
+## IndexTTS-2.5 identity and warnings (2026-08-12)
+
+v5 为 `generations`、`generation_jobs` 和 `generation_takes` 增加 `model_id`、`model_version`、`upstream_commit` 与 `warnings_json`（各表按兼容需要保持 nullable）。新 IndexTTS job 固定写入 `IndexTTS-2.5`、`2.5` 和完整上游 SHA；旧行保持 `NULL`，表示历史身份未知。
+
+`warnings_json` 对外解码为 `warnings: [{ code, message }]`。legacy language fallback、参考音频截断、max-mel 截断和 runtime warning 会稳定合并并按 `(code, message)` 去重。
 
 ## Phase 4 history and voice-linkage storage status (2026-07-06)
 

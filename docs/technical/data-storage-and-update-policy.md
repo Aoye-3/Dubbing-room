@@ -112,12 +112,14 @@ Electron 前端不直接读文件，使用 `mediaUrl(projectRelativePath)` 生�
 - `pyproject.toml`
 - `vite.config.ts`
 - `tsconfig.json`
-- `third_party/index-tts/checkpoints/config.yaml`
+- `third_party/index-tts/checkpoints-2.5/README.md`
+- `third_party/index-tts/checkpoints-2.5/pinyin.vocab`
 
 本地运行时配置/缓存：
 
 - `data/runtimes/voxcpm2/hf-cache/`
 - `data/runtimes/indextts2/`
+- `data/app/indextts2-runtime.json`
 - `.local-ffmpeg/`
 - `.venv/`
 - `.npm-cache/`
@@ -240,7 +242,7 @@ tensorboard/
 *.safetensors
 ```
 
-补强时要注意：`third_party/index-tts/checkpoints/config.yaml` 和 `pinyin.vocab` 当前有保留规则，不应误删。
+补强时要注意：`third_party/index-tts/checkpoints/` 是本地 2.0 回滚资产；`checkpoints-2.5/README.md` 和映射自固定上游源码的 `pinyin.vocab` 是唯一允许跟踪的 2.5 checkpoint 目录文件。2.5 config、权重、Tiktoken 和私人参考音频不得提交。
 
 ## GitHub 更新机制设计
 

@@ -4,7 +4,7 @@
 
 ## Core Documents
 
-- [Dual-Model Runtime, UI, and Job/Take Implementation Notes](phase-1-2-runtime-ui-implementation.md)
+- [Historical 2.0 Runtime, UI, and Job/Take Implementation Notes](phase-1-2-runtime-ui-implementation.md)
 - [GitHub Safe Update Runbook](github-safe-update-runbook.md)
 - [系统架构](architecture.md)
 - [Agent 协作与开发规则](agents.md)

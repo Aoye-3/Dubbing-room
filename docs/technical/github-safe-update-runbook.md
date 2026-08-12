@@ -75,14 +75,14 @@ lora/
 checkpoints/
 ```
 
-IndexTTS2 checkpoint handling has a special repository exception:
+IndexTTS checkpoint handling has a special repository exception:
 
 ```text
-third_party/index-tts/checkpoints/config.yaml
-third_party/index-tts/checkpoints/pinyin.vocab
+third_party/index-tts/checkpoints-2.5/README.md
+third_party/index-tts/checkpoints-2.5/pinyin.vocab
 ```
 
-The config and vocabulary are allowed in the repository; model weights remain ignored.
+The 2.5 placeholder documentation and the source-mapped vocabulary are allowed in the repository. The old `checkpoints/` directory remains a local 2.0 rollback asset; all 2.5 config/weights and runtime caches remain ignored and must survive updates unchanged.
 
 ## Public Repository Content
 

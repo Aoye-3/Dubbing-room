@@ -13,6 +13,7 @@ src/voxcpm_app/backend_server.py
 ```text
 GET  /health
 GET  /runtime-backends
+GET  /runtime-backends/indextts2/config
 GET  /media?path=...
 GET  /generation-jobs
 GET  /generation-jobs/:job_id
@@ -25,6 +26,7 @@ POST /generation-jobs/:job_id/cancel
 POST /generation-jobs/:job_id/retry
 POST /generation-takes/:take_id/select
 POST /runtime-backends/:backend_id/unload
+POST /runtime-backends/indextts2/config
 ```
 
 `POST /runtime-backends/:backend_id/unload` 当前只返回兼容响应 `unloaded: false`，尚未执行真实模型卸载。
@@ -86,14 +88,42 @@ IndexTTS2Service.generate(payload)
 GenerationRecord
 ```
 
+这是单 take 兼容入口，内部复用与 job 相同的 IndexTTS-2.5 JSONL worker 协议。新 Performance Desk 的“快速试听”和“生成多 Take”均使用 `POST /generation-jobs`；快速试听固定 `take_count=1`。
+
+新 IndexTTS-2.5 payload 必须包含：
+
+```text
+text
+language                 ZH | EN | JA | ES | AR
+speaker
+emotion_mode             same_voice | audio_prompt | vector | text_prompt
+emo_alpha
+duration_factor          0.5 .. 2.0
+text_normalization
+interval_silence
+max_text_tokens_per_segment
+受控 expert sampling 参数
+```
+
+情感音频、八维向量和文本描述互斥。模型加载参数（precision、QwenEmotion permission、CUDA kernel、DeepSpeed、accel、Torch compile）只允许通过 runtime config API 修改，不接受逐句覆盖。新请求缺少 `language` 返回 validation error；仅重试无版本身份的 legacy 2.0 job 时默认 `ZH` 并记录 `legacy_language_defaulted` warning。
+
+Runtime profile API：
+
+```text
+GET  /runtime-backends/indextts2/config
+POST /runtime-backends/indextts2/config
+```
+
+profile 是 exact-field object，包含 `precision`、`allow_text_emotion` 和四个 acceleration booleans。POST 原子写入 `data/app/indextts2-runtime.json`，并从下一个 job 起生效。
+
 ## 当前限制与延期接口
 
-- `/generate-audio` 和 `/indextts2/generate` 仍同步等待模型完成；job API 是并行保留的产品入口。
+- `/generate-audio` 和 `/indextts2/generate` 仍同步等待模型完成；IndexTTS-2.5 Performance Desk 以 job API 为主入口，同步 route 只保留单 take 兼容能力。
 - queue 只存在于当前 Python backend 进程，重启后不会恢复旧 queued/running 工作。
-- queued job 可以取消；running job 只写入 `cancel requested`，不会强制中断模型或子进程。
+- IndexTTS-2.5 queued/running job 可以取消；running cancel 终止子进程、取消未完成 take，并保证 lease 释放。VoxCPM2 仍没有等价的子进程硬取消协议。
 - retry 会创建一个新 job，不会原地复用原 job id。
 - 尚无 structured logs 查询接口。
-- Electron 当前把非 2xx 响应压缩成普通 `Error(message)`；`code` 和 `details` 尚未保留为前端类型。
+- Electron IPC 使用 cloneable success/error envelope，保留非 2xx 的 `message`、`code`、`type` 和 `details`；renderer 统一分类配置、显存、取消、截断和推理错误。
 - runtime load/free 和真实 unload 尚未实现。
 - 独立 Assets CRUD/import API、追加 take API 尚未实现；当前 assets 通过 job/take 和 Voice Library 服务间接管理。
 
@@ -146,6 +176,12 @@ IndexTTS2BackendAdapter
 - `timeout`
 - `output_missing`
 - `media_not_found`
+- `model_version_mismatch`
+- `text_emotion_unavailable`
+- `text_emotion_memory_insufficient`
+- `worker_protocol_error`
+- `worker_eof`
+- `cancelled`
 
 ## 兼容策略
 
@@ -171,17 +207,19 @@ sync route -> create job -> run immediately -> return legacy GenerationRecord
 - 后端所有错误返回 JSON。
 - Electron main 对超时和非 2xx 有清晰错误。
 
-## Job/take API status (2026-08-07)
+## Job/take API status (2026-08-12)
 
-`generation-jobs` create/list/get/cancel/retry、`generation-jobs/:job_id/takes` 和 `generation-takes/:take_id/select` 已实现。Take 列表响应包含用于播放的 `output_asset`。IndexTTS2 queued job 支持 `params.take_count`，范围限制为 1-5，默认值为 3。
+`generation-jobs` create/list/get/cancel/retry、`generation-jobs/:job_id/takes` 和 `generation-takes/:take_id/select` 已实现。Take 列表响应包含用于播放的 `output_asset`、模型身份和结构化 warnings。IndexTTS-2.5 job 支持 `params.take_count`，范围限制为 1-5。
 
 当前语义：
 
 - queued cancel 将 job 标记为 `cancelled`，worker 取出后会跳过。
-- running cancel 仅写入 `cancel requested`，不会中断正在执行的模型。
-- retry 从旧 job 的 backend、mode、voice 和 params 创建新 job。
+- running cancel 终止 IndexTTS-2.5 worker；active/queued take 标记为 cancelled，已成功或失败的 take 保持终态，不创建取消后的 History 投影。
+- retry 从旧 job 的 backend、mode、voice 和 params 创建新 job；legacy 缺 language 时只在新 job/take 写入 ZH fallback warning。
+- 新 IndexTTS job 固定 `backend_id=indextts2`、`model_id=IndexTTS-2.5`、`model_version=2.5` 和完整 upstream commit。
 - 选择 failed take 会被拒绝；选择 succeeded take 会更新唯一 selected take 并投影到兼容 History。
-- job/take 自动化覆盖使用 fake synthesizer/runner；真实模型验收仍未记录。
+- 选择投影会把 take identity 和 warnings 同步到 job 与 History generation。
+- job/take 自动化覆盖使用 fake model/runner；真实模型验收仍因官方 config/权重缺失而未执行。
 
 ## Phase 4 history and voice-linkage API status (2026-07-06)
 
