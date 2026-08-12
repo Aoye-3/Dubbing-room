@@ -10,7 +10,7 @@ data/app/
 data/backups/
 data/model-cache/
 data/runtimes/
-data/pytest-tmp/
+data/pytest-*/
 .pytest-tmp/
 .local-ffmpeg/
 *.log
@@ -32,3 +32,10 @@ third_party/index-tts/**/*.pt
 third_party/index-tts/**/*.pth
 third_party/index-tts/**/*.safetensors
 third_party/index-tts/**/*.t7
+!third_party/index-tts/checkpoints-2.5/
+third_party/index-tts/checkpoints-2.5/*
+!third_party/index-tts/checkpoints-2.5/README.md
+!third_party/index-tts/checkpoints-2.5/pinyin.vocab
+!third_party/index-tts/indextts/utils/maskgct/models/codec/facodec/modules/JDC/bst.t7
+!third_party/index-tts/indextts/utils/maskgct/models/tts/maskgct/ckpt/
+!third_party/index-tts/indextts/utils/maskgct/models/tts/maskgct/ckpt/wav2vec2bert_stats.pt

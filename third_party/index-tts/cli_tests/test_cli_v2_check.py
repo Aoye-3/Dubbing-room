@@ -10,6 +10,18 @@ from types import SimpleNamespace
 from unittest import mock
 
 
+def _mock_optional_dependency_imports():
+    """Make flash_attn/triton appear installed so acceleration CLI tests can run."""
+    original = importlib.import_module
+
+    def _fake_import(name, package=None):
+        if name in ("flash_attn", "triton"):
+            return mock.MagicMock()
+        return original(name, package)
+
+    return mock.patch("indextts.cli_v2.importlib.import_module", side_effect=_fake_import)
+
+
 REQUIRED_MODEL_FILES = [
     "config.yaml",
     "bpe.model",
@@ -328,8 +340,11 @@ class SynthCommandTests(unittest.TestCase):
         self.user_state = tempfile.TemporaryDirectory()
         self.env_patch = mock.patch.dict(os.environ, user_state_env(Path(self.user_state.name)), clear=False)
         self.env_patch.start()
+        self._import_patch = _mock_optional_dependency_imports()
+        self._import_patch.start()
 
     def tearDown(self):
+        self._import_patch.stop()
         self.env_patch.stop()
         self.user_state.cleanup()
 
@@ -405,6 +420,8 @@ class SynthCommandTests(unittest.TestCase):
                         "device": None,
                         "use_cuda_kernel": False,
                         "use_deepspeed": False,
+                        "use_accel": False,
+                        "use_torch_compile": False,
                     },
                 ),
                 (
@@ -1176,6 +1193,8 @@ class SynthCommandTests(unittest.TestCase):
                     "--fp16",
                     "--deepspeed",
                     "--cuda-kernel",
+                    "--accel",
+                    "--torch-compile",
                     "--verbose",
                 ],
             )
@@ -1192,6 +1211,8 @@ class SynthCommandTests(unittest.TestCase):
                 "device": "cuda:0",
                 "use_cuda_kernel": True,
                 "use_deepspeed": True,
+                "use_accel": True,
+                "use_torch_compile": True,
             },
         )
         self.assertTrue(calls[1][1]["verbose"])

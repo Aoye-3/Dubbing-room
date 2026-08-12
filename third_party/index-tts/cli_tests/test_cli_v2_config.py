@@ -10,6 +10,18 @@ from types import SimpleNamespace
 from unittest import mock
 
 
+def _mock_optional_dependency_imports():
+    """Make flash_attn/triton appear installed so acceleration CLI tests can run."""
+    original = importlib.import_module
+
+    def _fake_import(name, package=None):
+        if name in ("flash_attn", "triton"):
+            return mock.MagicMock()
+        return original(name, package)
+
+    return mock.patch("indextts.cli_v2.importlib.import_module", side_effect=_fake_import)
+
+
 REQUIRED_MODEL_FILES = [
     "config.yaml",
     "bpe.model",
@@ -98,6 +110,13 @@ def user_state_paths(temp_path):
 
 
 class ConfigCommandTests(unittest.TestCase):
+    def setUp(self):
+        self._import_patch = _mock_optional_dependency_imports()
+        self._import_patch.start()
+
+    def tearDown(self):
+        self._import_patch.stop()
+
     def run_cli(self, args, **kwargs):
         from indextts.cli_v2 import main
 
@@ -178,6 +197,8 @@ class ConfigCommandTests(unittest.TestCase):
                 second = self.run_cli(["config", "set", "use_fp16", "true"])
                 third = self.run_cli(["config", "set", "use_deepspeed", "false"])
                 fourth = self.run_cli(["config", "set", "use_cuda_kernel", "true"])
+                fifth = self.run_cli(["config", "set", "use_accel", "true"])
+                sixth = self.run_cli(["config", "set", "use_torch_compile", "false"])
 
             config_text = state["config_path"].read_text(encoding="utf-8")
 
@@ -185,10 +206,14 @@ class ConfigCommandTests(unittest.TestCase):
         self.assertEqual(second, (0, "use_fp16 = true\n", ""))
         self.assertEqual(third, (0, "use_deepspeed = false\n", ""))
         self.assertEqual(fourth, (0, "use_cuda_kernel = true\n", ""))
+        self.assertEqual(fifth, (0, "use_accel = true\n", ""))
+        self.assertEqual(sixth, (0, "use_torch_compile = false\n", ""))
         self.assertIn('default_device = "cuda:0"', config_text)
         self.assertIn("use_fp16 = true", config_text)
         self.assertIn("use_deepspeed = false", config_text)
         self.assertIn("use_cuda_kernel = true", config_text)
+        self.assertIn("use_accel = true", config_text)
+        self.assertIn("use_torch_compile = false", config_text)
 
     def test_config_set_boolean_preference_rejects_non_boolean_values(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -346,6 +371,8 @@ class ConfigCommandTests(unittest.TestCase):
                 "device": "cpu",
                 "use_cuda_kernel": True,
                 "use_deepspeed": True,
+                "use_accel": False,
+                "use_torch_compile": False,
             },
         )
 
@@ -393,6 +420,8 @@ class ConfigCommandTests(unittest.TestCase):
                 "device": "cpu",
                 "use_cuda_kernel": True,
                 "use_deepspeed": True,
+                "use_accel": False,
+                "use_torch_compile": False,
             },
         )
 
@@ -430,6 +459,8 @@ class ConfigCommandTests(unittest.TestCase):
                         "--no-fp16",
                         "--no-deepspeed",
                         "--no-cuda-kernel",
+                        "--no-accel",
+                        "--no-torch-compile",
                     ],
                     tts_factory=FakeIndexTTS2,
                 )
@@ -442,6 +473,8 @@ class ConfigCommandTests(unittest.TestCase):
         self.assertEqual(calls[0][1]["use_fp16"], False)
         self.assertEqual(calls[0][1]["use_deepspeed"], False)
         self.assertEqual(calls[0][1]["use_cuda_kernel"], False)
+        self.assertEqual(calls[0][1]["use_accel"], False)
+        self.assertEqual(calls[0][1]["use_torch_compile"], False)
 
     def test_synth_command_line_overrides_do_not_rewrite_persistent_config(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -484,6 +517,8 @@ class ConfigCommandTests(unittest.TestCase):
                         "--fp16",
                         "--deepspeed",
                         "--cuda-kernel",
+                        "--accel",
+                        "--torch-compile",
                     ],
                     tts_factory=FakeIndexTTS2,
                 )
@@ -498,6 +533,8 @@ class ConfigCommandTests(unittest.TestCase):
         self.assertEqual(calls[0][1]["use_fp16"], True)
         self.assertEqual(calls[0][1]["use_deepspeed"], True)
         self.assertEqual(calls[0][1]["use_cuda_kernel"], True)
+        self.assertEqual(calls[0][1]["use_accel"], True)
+        self.assertEqual(calls[0][1]["use_torch_compile"], True)
 
     def test_synth_command_line_can_disable_persisted_boolean_runtime_preferences_for_one_run(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -535,6 +572,8 @@ class ConfigCommandTests(unittest.TestCase):
                         "--no-fp16",
                         "--no-deepspeed",
                         "--no-cuda-kernel",
+                        "--no-accel",
+                        "--no-torch-compile",
                     ],
                     tts_factory=FakeIndexTTS2,
                 )
@@ -547,6 +586,8 @@ class ConfigCommandTests(unittest.TestCase):
         self.assertEqual(calls[0][1]["use_fp16"], False)
         self.assertEqual(calls[0][1]["use_deepspeed"], False)
         self.assertEqual(calls[0][1]["use_cuda_kernel"], False)
+        self.assertEqual(calls[0][1]["use_accel"], False)
+        self.assertEqual(calls[0][1]["use_torch_compile"], False)
 
 
 if __name__ == "__main__":

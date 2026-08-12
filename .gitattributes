@@ -1,0 +1,5 @@
+third_party/index-tts/** text eol=lf -whitespace
+third_party/index-tts/**/*.png binary
+third_party/index-tts/**/*.mp4 binary
+third_party/index-tts/**/*.t7 binary
+third_party/index-tts/**/*.pt binary
