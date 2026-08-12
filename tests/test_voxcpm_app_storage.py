@@ -54,7 +54,7 @@ def test_database_initialization_is_idempotent(tmp_path: Path):
             )
         }
 
-    assert versions == [(1,), (2,), (3,), (4,)]
+    assert versions == [(1,), (2,), (3,), (4,), (5,)]
     assert tables == {"voices", "generations", "assets", "generation_jobs", "generation_takes"}
     assert paths.voices_dir.exists()
     assert paths.generations_dir.exists()
@@ -116,7 +116,7 @@ def test_v1_database_is_additively_migrated_to_v2(tmp_path: Path):
         voice_columns = {row[1] for row in conn.execute("pragma table_info(voices)")}
         generation_columns = {row[1] for row in conn.execute("pragma table_info(generations)")}
 
-    assert versions == [(1,), (2,), (3,), (4,)]
+    assert versions == [(1,), (2,), (3,), (4,), (5,)]
     assert job_table == ("generation_jobs",)
     assert "legacy_generation_id" in take_columns
     assert "source_generation_id" in voice_columns
@@ -350,7 +350,7 @@ def test_asset_job_and_take_lifecycle(tmp_path: Path):
         model_id="IndexTTS2",
         mode="line_performance",
         input_text="Line one",
-        params={"emotion_mode": "same_voice"},
+        params={"emotion_mode": "same_voice", "language": "EN"},
     )
     take_one = create_generation_take(
         paths,
@@ -397,7 +397,7 @@ def test_select_take_projects_to_history_and_is_idempotent(tmp_path: Path):
         model_id="IndexTTS2",
         mode="line_performance",
         input_text="Line one",
-        params={"emotion_mode": "same_voice"},
+        params={"emotion_mode": "same_voice", "language": "EN"},
     )
     take = create_generation_take(
         paths,
@@ -432,7 +432,7 @@ def test_failed_take_cannot_be_selected(tmp_path: Path):
         model_id="IndexTTS2",
         mode="line_performance",
         input_text="Line one",
-        params={},
+        params={"language": "EN"},
     )
     take = create_generation_take(
         paths,

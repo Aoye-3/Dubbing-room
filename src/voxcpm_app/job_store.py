@@ -15,6 +15,11 @@ from .repositories import AssetRepository, GenerationJobRepository, GenerationTa
 from .schemas import ASSET_KINDS, JOB_STATUSES, AssetRecord, GenerationJobRecord, GenerationTakeRecord
 
 
+INDEXTTS25_MODEL_ID = "IndexTTS-2.5"
+INDEXTTS25_MODEL_VERSION = "2.5"
+INDEXTTS25_LANGUAGES = {"ZH", "EN", "JA", "ES", "AR"}
+
+
 def create_asset(
     paths: AppPaths,
     *,
@@ -82,12 +87,24 @@ def create_generation_job(
     voice_id: str | None = None,
     params: dict[str, object] | None = None,
     status: str = "queued",
+    model_version: str | None = None,
+    upstream_commit: str | None = None,
+    warnings: list[dict[str, str]] | None = None,
 ) -> GenerationJobRecord:
     if status not in JOB_STATUSES:
         raise ValueError(f"unsupported job status: {status}")
     text = input_text.strip()
     if not text:
         raise ValueError("input_text is required")
+    params = dict(params or {})
+    if backend_id == "indextts2":
+        language = str(params.get("language") or "")
+        if not language:
+            raise ValueError("language is required")
+        if language not in INDEXTTS25_LANGUAGES:
+            raise ValueError("language must be one of ZH, EN, JA, ES, AR")
+        model_id = INDEXTTS25_MODEL_ID
+        model_version = model_version or INDEXTTS25_MODEL_VERSION
     now = utc_now()
     record = GenerationJobRecord(
         id=str(uuid4()),
@@ -97,13 +114,16 @@ def create_generation_job(
         status=status,
         input_text=text,
         voice_id=voice_id,
-        params_json=json.dumps(params or {}, ensure_ascii=False),
+        params_json=json.dumps(params, ensure_ascii=False),
         output_asset_id=None,
         error_summary="",
         legacy_generation_id=None,
         created_at=now,
         updated_at=now,
         deleted_at=None,
+        model_version=model_version,
+        upstream_commit=upstream_commit,
+        warnings_json=json.dumps(warnings or [], ensure_ascii=False),
     )
     conn = initialize_database(paths)
     try:
@@ -156,6 +176,10 @@ def create_generation_take(
     params: dict[str, object] | None = None,
     status: str = "queued",
     output_asset_id: str | None = None,
+    model_id: str | None = None,
+    model_version: str | None = None,
+    upstream_commit: str | None = None,
+    warnings: list[dict[str, str]] | None = None,
 ) -> GenerationTakeRecord:
     if status not in JOB_STATUSES:
         raise ValueError(f"unsupported take status: {status}")
@@ -174,6 +198,10 @@ def create_generation_take(
         error_summary="",
         created_at=now,
         updated_at=now,
+        model_id=model_id,
+        model_version=model_version,
+        upstream_commit=upstream_commit,
+        warnings_json=json.dumps(warnings or [], ensure_ascii=False),
     )
     conn = initialize_database(paths)
     try:
@@ -285,4 +313,8 @@ def _create_selected_take_generation(
         source_backend=job.backend_id,
         source_mode="indextts2-performance",
         description=f"{take.label or 'Take'} / {job.mode}",
+        model_id=take.model_id or job.model_id,
+        model_version=take.model_version or job.model_version,
+        upstream_commit=take.upstream_commit or job.upstream_commit,
+        warnings=take.warnings or job.warnings,
     )

@@ -32,6 +32,10 @@ class AppPaths:
     def tmp_dir(self) -> Path:
         return self.app_root / "tmp"
 
+    @property
+    def indextts2_runtime_profile_path(self) -> Path:
+        return self.app_root / "indextts2-runtime.json"
+
     def ensure(self) -> None:
         self.voices_dir.mkdir(parents=True, exist_ok=True)
         self.generations_dir.mkdir(parents=True, exist_ok=True)

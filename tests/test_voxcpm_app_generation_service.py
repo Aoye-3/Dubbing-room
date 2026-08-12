@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import contextlib
 import sys
 import threading
 import time
@@ -48,7 +49,11 @@ class FakeIndexTTS2Service:
         self.fail_take_indexes = fail_take_indexes or set()
         self.calls: list[dict] = []
 
-    def generate_take(self, payload: dict, *, take_id: str):
+    @contextlib.contextmanager
+    def open_job_session(self, payload: dict, *, job_id: str, cancel_event):
+        yield self
+
+    def synthesize_take(self, session, payload: dict, *, take_id: str):
         self.calls.append({"payload": payload, "take_id": take_id})
         take_index = int(payload.get("take_index", len(self.calls)))
         if take_index in self.fail_take_indexes:
@@ -325,7 +330,7 @@ def test_backend_generation_take_api_returns_asset_and_selects_take(tmp_path: Pa
         model_id="IndexTTS2",
         mode="line_performance",
         input_text="queued line",
-        params={"emotion_mode": "same_voice"},
+        params={"emotion_mode": "same_voice", "language": "EN"},
     )
     take = create_generation_take(
         paths,
@@ -386,7 +391,8 @@ def test_generation_job_queue_runs_multiple_indextts2_takes_and_projects_first_s
             "params": {
                 "text": "queued line",
                 "speaker": {"kind": "upload", "path": str(_write_audio(tmp_path, "speaker.wav"))},
-                "emotion_mode": "same_voice",
+                    "emotion_mode": "same_voice",
+                    "language": "EN",
                 "emo_alpha": 1,
                 "take_count": 3,
             },

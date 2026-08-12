@@ -153,6 +153,21 @@ def initialize_database(paths: AppPaths) -> sqlite3.Connection:
         "insert or ignore into schema_version(version, applied_at) values (?, ?)",
         (4, utc_now()),
     )
+    _add_column_if_missing(conn, "generations", "model_id", "text")
+    _add_column_if_missing(conn, "generations", "model_version", "text")
+    _add_column_if_missing(conn, "generations", "upstream_commit", "text")
+    _add_column_if_missing(conn, "generations", "warnings_json", "text")
+    _add_column_if_missing(conn, "generation_jobs", "model_version", "text")
+    _add_column_if_missing(conn, "generation_jobs", "upstream_commit", "text")
+    _add_column_if_missing(conn, "generation_jobs", "warnings_json", "text")
+    _add_column_if_missing(conn, "generation_takes", "model_id", "text")
+    _add_column_if_missing(conn, "generation_takes", "model_version", "text")
+    _add_column_if_missing(conn, "generation_takes", "upstream_commit", "text")
+    _add_column_if_missing(conn, "generation_takes", "warnings_json", "text")
+    conn.execute(
+        "insert or ignore into schema_version(version, applied_at) values (?, ?)",
+        (5, utc_now()),
+    )
     conn.commit()
     return conn
 

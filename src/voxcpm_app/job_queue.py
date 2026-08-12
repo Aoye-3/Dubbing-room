@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import queue
 import threading
-from dataclasses import asdict
 from typing import Any
 
 from .generation_service import GenerationService
@@ -28,6 +27,11 @@ class GenerationJobQueue:
         self.generation_service = generation_service
         self.indextts2_service = indextts2_service
         self._queue: queue.Queue[str] = queue.Queue()
+        self._state_lock = threading.Lock()
+        self._state_changed = threading.Condition(self._state_lock)
+        self._cancel_events: dict[str, threading.Event] = {}
+        self._active_sessions: dict[str, Any] = {}
+        self._finalizing_jobs: set[str] = set()
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
 
@@ -37,16 +41,20 @@ class GenerationJobQueue:
             raise ValueError(f"unsupported backend_id: {backend_id}")
         params = dict(payload.get("params")) if isinstance(payload.get("params"), dict) else {}
         if backend_id == "indextts2":
+            _validate_indextts_language(params)
             params["take_count"] = _take_count(params.get("take_count"))
         input_text = str(payload.get("input_text") or params.get("input_text") or params.get("text") or "").strip()
         job = create_generation_job(
             self.paths,
             backend_id=backend_id,
-            model_id=str(payload.get("model_id") or _default_model_id(backend_id)),
+            model_id=_default_model_id(backend_id) if backend_id == "indextts2" else str(payload.get("model_id") or _default_model_id(backend_id)),
             mode=str(payload.get("mode") or _default_mode(backend_id)),
             input_text=input_text,
             voice_id=payload.get("voice_id") if isinstance(payload.get("voice_id"), str) else None,
             params=params,
+            model_version="2.5" if backend_id == "indextts2" else None,
+            upstream_commit=_indextts_upstream_commit() if backend_id == "indextts2" else None,
+            warnings=payload.get("warnings") if isinstance(payload.get("warnings"), list) else None,
         )
         if backend_id == "indextts2":
             for take_index in range(1, _take_count(params.get("take_count")) + 1):
@@ -57,21 +65,41 @@ class GenerationJobQueue:
                     take_index=take_index,
                     label=f"Take {take_index}",
                     params={**params, "take_index": take_index},
+                    model_id=job.model_id,
+                    model_version=job.model_version,
+                    upstream_commit=job.upstream_commit,
+                    warnings=job.warnings,
                 )
+        with self._state_lock:
+            self._cancel_events[job.id] = threading.Event()
         self._queue.put(job.id)
         return job
 
     def cancel(self, job_id: str) -> GenerationJobRecord:
-        job = _require_job(self.paths, job_id)
-        if job.status == "queued":
-            return update_generation_job(self.paths, job.id, status="cancelled", error_summary="")
-        if job.status == "running":
-            return update_generation_job(self.paths, job.id, error_summary="cancel requested")
-        return job
+        _require_job(self.paths, job_id)
+        with self._state_changed:
+            while job_id in self._finalizing_jobs:
+                self._state_changed.wait()
+            job = _require_job(self.paths, job_id)
+            if job.status in {"queued", "running"}:
+                event = self._cancel_events.setdefault(job.id, threading.Event())
+                event.set()
+                session = self._active_sessions.get(job.id)
+                if session is not None:
+                    session.terminate()
+                for take in list_generation_takes(self.paths, job.id):
+                    if take.status in {"queued", "running"}:
+                        update_generation_take(self.paths, take.id, status="cancelled", error_summary="")
+                return update_generation_job(self.paths, job.id, status="cancelled", error_summary="")
+            return job
 
     def retry(self, job_id: str) -> GenerationJobRecord:
         job = _require_job(self.paths, job_id)
         params = json.loads(job.params_json or "{}")
+        warnings = list(job.warnings)
+        if job.backend_id == "indextts2" and job.model_version is None and not params.get("language"):
+            params["language"] = "ZH"
+            warnings.append({"code": "legacy_language_defaulted", "message": "Legacy retry defaulted language to ZH."})
         return self.submit(
             {
                 "backend_id": job.backend_id,
@@ -80,6 +108,7 @@ class GenerationJobQueue:
                 "input_text": job.input_text,
                 "voice_id": job.voice_id,
                 "params": params,
+                "warnings": warnings,
             }
         )
 
@@ -94,7 +123,14 @@ class GenerationJobQueue:
     def _execute(self, job_id: str) -> None:
         job = _require_job(self.paths, job_id)
         if job.status != "queued":
+            with self._state_lock:
+                self._active_sessions.pop(job.id, None)
+                self._cancel_events.pop(job.id, None)
             return
+        with self._state_lock:
+            cancel_event = self._cancel_events.setdefault(job.id, threading.Event())
+            if cancel_event.is_set():
+                return
         update_generation_job(self.paths, job.id, status="running", error_summary="")
         params = json.loads(job.params_json or "{}")
         try:
@@ -102,7 +138,7 @@ class GenerationJobQueue:
                 record = self.generation_service.generate_audio(_voxcpm_payload(job, params))
                 asset_kind = "generation_output"
             elif job.backend_id == "indextts2":
-                self._execute_indextts2_job(job)
+                self._execute_indextts2_job(job, cancel_event)
                 return
             else:
                 raise ValueError(f"unsupported backend_id: {job.backend_id}")
@@ -136,53 +172,104 @@ class GenerationJobQueue:
             if job.backend_id == "indextts2":
                 self._mark_take_succeeded(job, output_asset_id)
         except Exception as exc:
-            error_summary = str(exc).splitlines()[0][:500]
+            current = _require_job(self.paths, job.id)
+            if current.status == "cancelled" or cancel_event.is_set():
+                return
+            error_summary = _error_summary(exc)
             update_generation_job(self.paths, job.id, status="failed", error_summary=error_summary)
             self._mark_take_failed(job, error_summary)
+        finally:
+            with self._state_changed:
+                self._finalizing_jobs.discard(job.id)
+                self._active_sessions.pop(job.id, None)
+                self._cancel_events.pop(job.id, None)
+                self._state_changed.notify_all()
 
-    def _execute_indextts2_job(self, job: GenerationJobRecord) -> None:
+    def _execute_indextts2_job(self, job: GenerationJobRecord, cancel_event: threading.Event) -> None:
         takes = list_generation_takes(self.paths, job.id)
         if not takes:
             update_generation_job(self.paths, job.id, status="failed", error_summary="job has no takes")
             return
-        for take in takes:
-            if take.status != "queued":
-                continue
-            params = json.loads(take.params_json or job.params_json or "{}")
-            update_generation_take(self.paths, take.id, status="running", error_summary="")
+        first_params = json.loads(takes[0].params_json or job.params_json or "{}")
+        with self.indextts2_service.open_job_session(
+            _indextts2_payload(job, first_params),
+            job_id=job.id,
+            cancel_event=cancel_event,
+        ) as session:
+            with self._state_lock:
+                self._active_sessions[job.id] = session
+            for take_position, take in enumerate(takes):
+                is_last_take = take_position == len(takes) - 1
+                if cancel_event.is_set():
+                    break
+                current = next(item for item in list_generation_takes(self.paths, job.id) if item.id == take.id)
+                if current.status != "queued":
+                    continue
+                params = json.loads(take.params_json or job.params_json or "{}")
+                update_generation_take(self.paths, take.id, status="running", error_summary="")
+                try:
+                    output_path, sample_rate = self.indextts2_service.synthesize_take(
+                        session,
+                        _indextts2_payload(job, params),
+                        take_id=take.id,
+                    )
+                    with self._state_lock:
+                        current_job = _require_job(self.paths, job.id)
+                        if cancel_event.is_set() or current_job.status == "cancelled":
+                            update_generation_take(self.paths, take.id, status="cancelled", error_summary="")
+                            break
+                        asset = create_asset(self.paths, kind="take_output", path=output_path, sample_rate=sample_rate)
+                        update_generation_take(
+                            self.paths,
+                            take.id,
+                            status="succeeded",
+                            output_asset_id=asset.id,
+                            error_summary="",
+                            warnings_json=json.dumps(
+                                _merge_warnings(take.warnings, getattr(session, "last_warnings", [])),
+                                ensure_ascii=False,
+                            ),
+                        )
+                        if is_last_take:
+                            self._finalizing_jobs.add(job.id)
+                except Exception as exc:
+                    with self._state_lock:
+                        if cancel_event.is_set() or _require_job(self.paths, job.id).status == "cancelled":
+                            update_generation_take(self.paths, take.id, status="cancelled", error_summary="")
+                            break
+                        update_generation_take(
+                            self.paths,
+                            take.id,
+                            status="failed",
+                            error_summary=_error_summary(exc),
+                        )
+                        if is_last_take:
+                            self._finalizing_jobs.add(job.id)
+        with self._state_changed:
             try:
-                output_path, sample_rate = self.indextts2_service.generate_take(
-                    _indextts2_payload(job, params),
-                    take_id=take.id,
-                )
-                asset = create_asset(self.paths, kind="take_output", path=output_path, sample_rate=sample_rate)
-                update_generation_take(
-                    self.paths,
-                    take.id,
-                    status="succeeded",
-                    output_asset_id=asset.id,
-                    error_summary="",
-                )
-            except Exception as exc:
-                update_generation_take(
-                    self.paths,
-                    take.id,
-                    status="failed",
-                    error_summary=str(exc).splitlines()[0][:500],
-                )
-        completed = list_generation_takes(self.paths, job.id)
-        succeeded = [take for take in completed if take.status == "succeeded"]
-        if not succeeded:
-            errors = [take.error_summary for take in completed if take.error_summary]
-            update_generation_job(
-                self.paths,
-                job.id,
-                status="failed",
-                error_summary=errors[0] if errors else "all takes failed",
-            )
-            return
-        selected = next((take for take in succeeded if take.is_selected), succeeded[0])
-        select_take_and_project(self.paths, selected.id)
+                if cancel_event.is_set() or _require_job(self.paths, job.id).status == "cancelled":
+                    for take in list_generation_takes(self.paths, job.id):
+                        if take.status in {"queued", "running"}:
+                            update_generation_take(self.paths, take.id, status="cancelled", error_summary="")
+                    if _require_job(self.paths, job.id).status != "cancelled":
+                        update_generation_job(self.paths, job.id, status="cancelled", error_summary="")
+                    return
+                completed = list_generation_takes(self.paths, job.id)
+                succeeded = [take for take in completed if take.status == "succeeded"]
+                if not succeeded:
+                    errors = [take.error_summary for take in completed if take.error_summary]
+                    update_generation_job(
+                        self.paths,
+                        job.id,
+                        status="failed",
+                        error_summary=errors[0] if errors else "all takes failed",
+                    )
+                    return
+                selected = next((take for take in succeeded if take.is_selected), succeeded[0])
+                select_take_and_project(self.paths, selected.id)
+            finally:
+                self._finalizing_jobs.discard(job.id)
+                self._state_changed.notify_all()
 
     def _mark_take_failed(self, job: GenerationJobRecord, error_summary: str) -> None:
         takes = list_generation_takes(self.paths, job.id)
@@ -198,7 +285,7 @@ def _require_job(paths: AppPaths, job_id: str) -> GenerationJobRecord:
 
 
 def _default_model_id(backend_id: str) -> str:
-    return "openbmb/VoxCPM2" if backend_id == "voxcpm2" else "IndexTTS2"
+    return "openbmb/VoxCPM2" if backend_id == "voxcpm2" else "IndexTTS-2.5"
 
 
 def _default_mode(backend_id: str) -> str:
@@ -211,6 +298,14 @@ def _take_count(value: object) -> int:
     except (TypeError, ValueError):
         count = 3
     return max(1, min(5, count))
+
+
+def _validate_indextts_language(params: dict[str, Any]) -> None:
+    language = str(params.get("language") or "")
+    if not language:
+        raise ValueError("language is required")
+    if language not in {"ZH", "EN", "JA", "ES", "AR"}:
+        raise ValueError("language must be one of ZH, EN, JA, ES, AR")
 
 
 def _voxcpm_payload(job: GenerationJobRecord, params: dict[str, Any]) -> dict[str, Any]:
@@ -231,6 +326,33 @@ def _indextts2_payload(job: GenerationJobRecord, params: dict[str, Any]) -> dict
 
 
 def job_to_dict(job: GenerationJobRecord) -> dict[str, Any]:
-    payload = asdict(job)
+    payload = job.to_dict()
     payload["params"] = json.loads(job.params_json or "{}")
     return payload
+
+
+def _error_summary(exc: Exception) -> str:
+    code = getattr(exc, "code", None)
+    text = str(exc).splitlines()[0][:450]
+    return f"{code}: {text}" if code else text
+
+
+def _indextts_upstream_commit() -> str:
+    from .indextts2_runtime_profile import UPSTREAM_COMMIT
+
+    return UPSTREAM_COMMIT
+
+
+def _merge_warnings(*groups: list[dict[str, str]]) -> list[dict[str, str]]:
+    result: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for group in groups:
+        for warning in group:
+            if not isinstance(warning, dict) or "code" not in warning or "message" not in warning:
+                continue
+            stable = {"code": str(warning["code"]), "message": str(warning["message"])}
+            key = (stable["code"], stable["message"])
+            if key not in seen:
+                seen.add(key)
+                result.append(stable)
+    return result

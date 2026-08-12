@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import contextlib
+import io
 import json
+import queue
 import subprocess
 import sys
 import threading
@@ -43,7 +46,11 @@ class FakeIndexTTS2Runner:
             capabilities=["line_performance", "emotion_vector"],
         )
 
-    def synthesize(self, paths: AppPaths, payload: dict, output_path: Path) -> int:
+    @contextlib.contextmanager
+    def open_session(self, paths: AppPaths, payload: dict, *, cancel_event=None):
+        yield self
+
+    def synthesize(self, payload: dict, output_path: Path, *, take_id: str) -> int:
         self.calls.append(payload)
         if self.error is not None:
             raise self.error
@@ -63,6 +70,7 @@ def test_indextts2_generates_with_saved_voice_and_vector(tmp_path: Path):
     record = service.generate(
         {
             "text": "快躲起来！是他要来了！",
+            "language": "ZH",
             "speaker": {"kind": "saved_voice", "voice_id": voice.id},
             "emotion_mode": "vector",
             "emo_vector": {"happy": 0.1, "angry": 0.5, "sad": 0, "afraid": 0.2},
@@ -86,6 +94,9 @@ def test_indextts2_generates_with_saved_voice_and_vector(tmp_path: Path):
 
 def test_indextts2_text_emotion_can_use_line_text(tmp_path: Path):
     paths = AppPaths.from_project_root(tmp_path)
+    checkpoint_dir = tmp_path / "third_party" / "index-tts" / "checkpoints-2.5"
+    (checkpoint_dir / "QwenEmotion").mkdir(parents=True)
+    (checkpoint_dir / "config.yaml").write_text("qwen_emo_path: QwenEmotion\n", encoding="utf-8")
     speaker = tmp_path / "speaker.wav"
     speaker.write_bytes(b"speaker-bytes")
     runner = FakeIndexTTS2Runner()
@@ -94,6 +105,7 @@ def test_indextts2_text_emotion_can_use_line_text(tmp_path: Path):
     record = service.generate(
         {
             "text": "help me sound worried",
+            "language": "EN",
             "speaker": {"kind": "upload", "path": str(speaker)},
             "emotion_mode": "text_prompt",
         }
@@ -114,6 +126,7 @@ def test_indextts2_rejects_overweighted_emotion_vector(tmp_path: Path):
         service.generate(
             {
                 "text": "hello",
+                "language": "EN",
                 "speaker": {"kind": "upload", "path": str(speaker)},
                 "emotion_mode": "vector",
                 "emo_vector": {"happy": 0.5, "angry": 0.4},
@@ -126,7 +139,7 @@ def test_indextts2_requires_speaker_reference(tmp_path: Path):
     service = IndexTTS2Service(paths, runner=FakeIndexTTS2Runner(), coordinator=RuntimeCoordinator())
 
     with pytest.raises(ValueError, match="speaker reference is required"):
-        service.generate({"text": "hello", "emotion_mode": "same_voice"})
+        service.generate({"text": "hello", "language": "EN", "emotion_mode": "same_voice"})
 
 
 def test_indextts2_rejects_missing_emotion_audio_for_audio_mode(tmp_path: Path):
@@ -139,6 +152,7 @@ def test_indextts2_rejects_missing_emotion_audio_for_audio_mode(tmp_path: Path):
         service.generate(
             {
                 "text": "hello",
+                "language": "EN",
                 "speaker": {"kind": "upload", "path": str(speaker)},
                 "emotion_mode": "audio_prompt",
             }
@@ -157,6 +171,7 @@ def test_indextts2_rejects_multiple_emotion_sources(tmp_path: Path):
         service.generate(
             {
                 "text": "hello",
+                "language": "EN",
                 "speaker": {"kind": "upload", "path": str(speaker)},
                 "emotion_mode": "audio_prompt",
                 "emotion_audio": {"kind": "upload", "path": str(emotion)},
@@ -178,6 +193,7 @@ def test_indextts2_marks_failed_when_runner_fails(tmp_path: Path):
     record = service.generate(
         {
             "text": "hello",
+            "language": "EN",
             "speaker": {"kind": "upload", "path": str(speaker)},
             "emotion_mode": "same_voice",
         }
@@ -212,6 +228,7 @@ def test_indextts2_fails_when_voxcpm2_holds_runtime_lease(tmp_path: Path):
         record = service.generate(
             {
                 "text": "hello",
+                "language": "EN",
                 "speaker": {"kind": "upload", "path": str(speaker)},
                 "emotion_mode": "same_voice",
             }
@@ -225,12 +242,13 @@ def test_subprocess_runner_status_lists_missing_checkpoint_files(tmp_path: Path)
     paths = AppPaths.from_project_root(tmp_path)
     source_root = tmp_path / "third_party" / "index-tts"
     runtime_python = tmp_path / "data" / "runtimes" / "indextts2" / ".venv" / "Scripts" / "python.exe"
-    checkpoint_dir = source_root / "checkpoints"
-    source_root.mkdir(parents=True)
+    checkpoint_dir = source_root / "checkpoints-2.5"
+    (source_root / "indextts").mkdir(parents=True)
+    (source_root / "indextts" / "infer_v2_5.py").write_text("", encoding="utf-8")
     runtime_python.parent.mkdir(parents=True)
     checkpoint_dir.mkdir(parents=True)
     runtime_python.write_text("", encoding="utf-8")
-    (checkpoint_dir / "config.yaml").write_text("model: fake\n", encoding="utf-8")
+    (checkpoint_dir / "config.yaml").write_text("version: 2.5\n", encoding="utf-8")
 
     status = SubprocessIndexTTS2Runner().status(paths, coordinator=RuntimeCoordinator())
 
@@ -240,7 +258,7 @@ def test_subprocess_runner_status_lists_missing_checkpoint_files(tmp_path: Path)
     assert status.details["runtime_python"] == str(runtime_python)
     assert status.details["model_dir"] == str(checkpoint_dir)
     assert isinstance(status.details["missing_checkpoints"], list)
-    assert "bpe.model" in status.last_error
+    assert "codec.pth" in status.last_error
     assert "gpt.pth" in status.last_error
     assert "s2mel.pth" in status.last_error
 
@@ -258,8 +276,9 @@ def test_subprocess_runner_status_reports_missing_config(tmp_path: Path):
     paths = AppPaths.from_project_root(tmp_path)
     source_root = tmp_path / "third_party" / "index-tts"
     runtime_python = tmp_path / "data" / "runtimes" / "indextts2" / ".venv" / "Scripts" / "python.exe"
-    checkpoint_dir = source_root / "checkpoints"
-    source_root.mkdir(parents=True)
+    checkpoint_dir = source_root / "checkpoints-2.5"
+    (source_root / "indextts").mkdir(parents=True)
+    (source_root / "indextts" / "infer_v2_5.py").write_text("", encoding="utf-8")
     runtime_python.parent.mkdir(parents=True)
     checkpoint_dir.mkdir(parents=True)
     runtime_python.write_text("", encoding="utf-8")
@@ -297,10 +316,10 @@ def test_indextts2_worker_passes_device_to_model(tmp_path: Path, monkeypatch: py
             sf.write(str(kwargs["output_path"]), np.zeros(10, dtype=np.float32), 16000)
 
     indextts_module = types.ModuleType("indextts")
-    infer_module = types.ModuleType("indextts.infer_v2")
+    infer_module = types.ModuleType("indextts.infer_v2_5")
     infer_module.IndexTTS2 = FakeIndexTTS2
     monkeypatch.setitem(sys.modules, "indextts", indextts_module)
-    monkeypatch.setitem(sys.modules, "indextts.infer_v2", infer_module)
+    monkeypatch.setitem(sys.modules, "indextts.infer_v2_5", infer_module)
 
     output_path = tmp_path / "out.wav"
     result = run_indextts2_worker(
@@ -312,6 +331,7 @@ def test_indextts2_worker_passes_device_to_model(tmp_path: Path, monkeypatch: py
             "device": "cuda:1",
             "spk_audio_prompt": str(tmp_path / "speaker.wav"),
             "text": "hello",
+            "language": "EN",
             "use_accel": True,
             "use_torch_compile": True,
         }
@@ -327,24 +347,18 @@ def test_subprocess_runner_timeout_is_classified(tmp_path: Path, monkeypatch: py
     paths = AppPaths.from_project_root(tmp_path)
     source_root = tmp_path / "third_party" / "index-tts"
     runtime_python = tmp_path / "data" / "runtimes" / "indextts2" / ".venv" / "Scripts" / "python.exe"
-    checkpoint_dir = source_root / "checkpoints"
-    source_root.mkdir(parents=True)
+    checkpoint_dir = source_root / "checkpoints-2.5"
+    (source_root / "indextts").mkdir(parents=True)
+    (source_root / "indextts" / "infer_v2_5.py").write_text("", encoding="utf-8")
     runtime_python.parent.mkdir(parents=True)
     runtime_python.write_text("", encoding="utf-8")
     for item in [
         "config.yaml",
-        "bpe.model",
         "gpt.pth",
         "s2mel.pth",
+        "codec.pth",
+        "multilingual_zh_ja_yue_char_del.tiktoken",
         "wav2vec2bert_stats.pt",
-        "feat1.pt",
-        "feat2.pt",
-        "qwen0.6bemo4-merge",
-        "hf_cache/semantic_codec_model.safetensors",
-        "hf_cache/campplus_cn_common.bin",
-        "hf_cache/bigvgan/config.json",
-        "hf_cache/bigvgan/bigvgan_generator.pt",
-        "hf_cache/w2v-bert-2.0",
     ]:
         target = checkpoint_dir / item
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -353,16 +367,13 @@ def test_subprocess_runner_timeout_is_classified(tmp_path: Path, monkeypatch: py
         else:
             target.mkdir(parents=True, exist_ok=True)
 
-    def fake_run(*args, **kwargs):
-        raise subprocess.TimeoutExpired(cmd=args[0], timeout=kwargs["timeout"])
-
-    monkeypatch.setattr(subprocess, "run", fake_run)
+    monkeypatch.setattr(subprocess, "Popen", lambda *args, **kwargs: _FakeWorkerProcess(mode="timeout"))
     monkeypatch.setenv("INDEXTTS2_WORKER_TIMEOUT_SECONDS", "1")
 
     with pytest.raises(AppBackendError) as raised:
         SubprocessIndexTTS2Runner().synthesize(
             paths,
-            {"spk_audio_prompt": str(tmp_path / "speaker.wav"), "text": "hello"},
+            {"spk_audio_prompt": str(tmp_path / "speaker.wav"), "text": "hello", "language": "EN"},
             tmp_path / "out.wav",
         )
 
@@ -373,19 +384,12 @@ def test_subprocess_runner_preserves_worker_error_code(tmp_path: Path, monkeypat
     paths = AppPaths.from_project_root(tmp_path)
     _create_complete_indextts2_runtime(tmp_path)
 
-    def fake_run(*args, **kwargs):
-        return types.SimpleNamespace(
-            stdout=json.dumps({"ok": False, "error": "boom", "code": "worker_failed", "details": {"phase": "infer"}}),
-            stderr="",
-            returncode=1,
-        )
-
-    monkeypatch.setattr(subprocess, "run", fake_run)
+    monkeypatch.setattr(subprocess, "Popen", lambda *args, **kwargs: _FakeWorkerProcess(mode="failed"))
 
     with pytest.raises(AppBackendError) as raised:
         SubprocessIndexTTS2Runner().synthesize(
             paths,
-            {"spk_audio_prompt": str(tmp_path / "speaker.wav"), "text": "hello"},
+            {"spk_audio_prompt": str(tmp_path / "speaker.wav"), "text": "hello", "language": "EN"},
             tmp_path / "out.wav",
         )
 
@@ -397,15 +401,12 @@ def test_subprocess_runner_classifies_missing_output(tmp_path: Path, monkeypatch
     paths = AppPaths.from_project_root(tmp_path)
     _create_complete_indextts2_runtime(tmp_path)
 
-    def fake_run(*args, **kwargs):
-        return types.SimpleNamespace(stdout=json.dumps({"ok": True}), stderr="", returncode=0)
-
-    monkeypatch.setattr(subprocess, "run", fake_run)
+    monkeypatch.setattr(subprocess, "Popen", lambda *args, **kwargs: _FakeWorkerProcess(mode="missing"))
 
     with pytest.raises(AppBackendError) as raised:
         SubprocessIndexTTS2Runner().synthesize(
             paths,
-            {"spk_audio_prompt": str(tmp_path / "speaker.wav"), "text": "hello"},
+            {"spk_audio_prompt": str(tmp_path / "speaker.wav"), "text": "hello", "language": "EN"},
             tmp_path / "missing.wav",
         )
 
@@ -424,7 +425,7 @@ def test_backend_runtime_status_and_indextts2_generate_route(tmp_path: Path):
             server,
             "POST",
             "/indextts2/generate",
-            {"text": "hello", "speaker": {"kind": "upload", "path": str(speaker)}, "emotion_mode": "same_voice"},
+            {"text": "hello", "language": "EN", "speaker": {"kind": "upload", "path": str(speaker)}, "emotion_mode": "same_voice"},
         )
 
         assert [item["backend_id"] for item in status["items"]] == ["voxcpm2", "indextts2"]
@@ -442,7 +443,7 @@ def test_backend_returns_400_for_missing_indextts2_speaker(tmp_path: Path):
     server = _start_server(paths, service)
     try:
         with pytest.raises(urllib.error.HTTPError) as raised:
-            _request_json(server, "POST", "/indextts2/generate", {"text": "hello"})
+            _request_json(server, "POST", "/indextts2/generate", {"text": "hello", "language": "EN"})
         body = json.loads(raised.value.read().decode("utf-8"))
         assert raised.value.code == 400
         assert body["error"] == "speaker reference is required"
@@ -475,24 +476,18 @@ def _request_json(server, method: str, path: str, payload: dict | None = None):
 def _create_complete_indextts2_runtime(root: Path) -> None:
     source_root = root / "third_party" / "index-tts"
     runtime_python = root / "data" / "runtimes" / "indextts2" / ".venv" / "Scripts" / "python.exe"
-    checkpoint_dir = source_root / "checkpoints"
-    source_root.mkdir(parents=True, exist_ok=True)
+    checkpoint_dir = source_root / "checkpoints-2.5"
+    (source_root / "indextts").mkdir(parents=True, exist_ok=True)
+    (source_root / "indextts" / "infer_v2_5.py").write_text("", encoding="utf-8")
     runtime_python.parent.mkdir(parents=True, exist_ok=True)
     runtime_python.write_text("", encoding="utf-8")
     for item in [
         "config.yaml",
-        "bpe.model",
         "gpt.pth",
         "s2mel.pth",
+        "codec.pth",
+        "multilingual_zh_ja_yue_char_del.tiktoken",
         "wav2vec2bert_stats.pt",
-        "feat1.pt",
-        "feat2.pt",
-        "qwen0.6bemo4-merge",
-        "hf_cache/semantic_codec_model.safetensors",
-        "hf_cache/campplus_cn_common.bin",
-        "hf_cache/bigvgan/config.json",
-        "hf_cache/bigvgan/bigvgan_generator.pt",
-        "hf_cache/w2v-bert-2.0",
     ]:
         target = checkpoint_dir / item
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -500,3 +495,50 @@ def _create_complete_indextts2_runtime(root: Path) -> None:
             target.write_text("fake", encoding="utf-8")
         else:
             target.mkdir(parents=True, exist_ok=True)
+
+
+class _FakeWorkerProcess:
+    def __init__(self, *, mode: str):
+        self.mode = mode
+        self.stdin = self
+        self.stdout = self
+        self.stderr = io.StringIO("")
+        self.returncode = None
+        self._lines: queue.Queue[str] = queue.Queue()
+
+    def write(self, value: str) -> int:
+        message = json.loads(value)
+        if message["op"] == "init" and self.mode != "timeout":
+            self._lines.put('{"event":"ready"}\n')
+        elif message["op"] == "synthesize":
+            take_id = message["take_id"]
+            self._lines.put(json.dumps({"event": "take_started", "take_id": take_id}) + "\n")
+            if self.mode == "failed":
+                self._lines.put(json.dumps({"event": "take_failed", "take_id": take_id, "code": "worker_failed", "error": "boom", "details": {"phase": "infer"}}) + "\n")
+            else:
+                self._lines.put(json.dumps({"event": "take_succeeded", "take_id": take_id, "sample_rate": 24000, "output_path": message["output_path"]}) + "\n")
+        elif message["op"] == "complete":
+            self._lines.put('{"event":"complete"}\n')
+            self.returncode = 0
+        return len(value)
+
+    def flush(self):
+        pass
+
+    def readline(self):
+        try:
+            return self._lines.get(timeout=2)
+        except queue.Empty:
+            return ""
+
+    def poll(self):
+        return self.returncode
+
+    def wait(self, timeout=None):
+        return self.returncode or 0
+
+    def terminate(self):
+        self.returncode = -15
+
+    def kill(self):
+        self.returncode = -9

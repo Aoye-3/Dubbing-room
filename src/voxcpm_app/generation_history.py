@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from uuid import uuid4
 
@@ -26,6 +27,10 @@ def create_generation(
     source_backend: str = "voxcpm2",
     source_mode: str = "legacy",
     description: str = "",
+    model_id: str | None = None,
+    model_version: str | None = None,
+    upstream_commit: str | None = None,
+    warnings: list[dict[str, str]] | None = None,
 ) -> GenerationRecord:
     text = input_text.strip()
     if not text:
@@ -56,6 +61,10 @@ def create_generation(
         created_at=now,
         updated_at=now,
         deleted_at=None,
+        model_id=model_id,
+        model_version=model_version,
+        upstream_commit=upstream_commit,
+        warnings_json=json.dumps(warnings or [], ensure_ascii=False),
     )
     conn = initialize_database(paths)
     try:
@@ -118,6 +127,35 @@ def mark_generation_failed(paths: AppPaths, generation_id: str, *, error_summary
             generation_id,
             status="failed",
             error_summary=error_summary,
+        )
+    finally:
+        conn.close()
+
+
+def update_generation_warnings(
+    paths: AppPaths,
+    generation_id: str,
+    warnings: list[dict[str, str]],
+) -> GenerationRecord:
+    conn = initialize_database(paths)
+    try:
+        repository = GenerationRepository(conn)
+        current = repository.get(generation_id)
+        if current is None:
+            raise KeyError(f"generation not found: {generation_id}")
+        stable: list[dict[str, str]] = []
+        seen: set[tuple[str, str]] = set()
+        for item in [*current.warnings, *warnings]:
+            if not isinstance(item, dict) or "code" not in item or "message" not in item:
+                continue
+            warning = {"code": str(item["code"]), "message": str(item["message"])}
+            key = (warning["code"], warning["message"])
+            if key not in seen:
+                seen.add(key)
+                stable.append(warning)
+        return repository.update(
+            generation_id,
+            warnings_json=json.dumps(stable, ensure_ascii=False),
         )
     finally:
         conn.close()

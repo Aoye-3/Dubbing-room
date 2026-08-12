@@ -44,6 +44,9 @@ def build_handler(
                 if parsed.path == "/health":
                     self._write_json(HTTPStatus.OK, {"ok": True})
                     return
+                if parsed.path == "/runtime-backends/indextts2/config":
+                    self._write_json(HTTPStatus.OK, index_service.runtime_profile().to_dict())
+                    return
                 if parsed.path == "/runtime-backends":
                     self._write_json(
                         HTTPStatus.OK,
@@ -87,6 +90,9 @@ def build_handler(
                 if parsed.path == "/indextts2/generate":
                     record = index_service.generate(payload)
                     self._write_json(HTTPStatus.OK, record.to_dict())
+                    return
+                if parsed.path == "/runtime-backends/indextts2/config":
+                    self._write_json(HTTPStatus.OK, index_service.save_runtime_profile(payload).to_dict())
                     return
                 if parsed.path == "/generation-jobs":
                     job = job_queue.submit(payload)

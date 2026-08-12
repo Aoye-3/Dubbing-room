@@ -55,9 +55,20 @@ class GenerationRecord:
     created_at: str
     updated_at: str
     deleted_at: str | None
+    model_id: str | None = None
+    model_version: str | None = None
+    upstream_commit: str | None = None
+    warnings_json: str | None = None
+
+    @property
+    def warnings(self) -> list[dict[str, str]]:
+        return _decode_warnings(self.warnings_json)
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        payload = asdict(self)
+        payload.pop("warnings_json", None)
+        payload["warnings"] = self.warnings
+        return payload
 
 
 @dataclass(frozen=True)
@@ -92,9 +103,19 @@ class GenerationJobRecord:
     created_at: str
     updated_at: str
     deleted_at: str | None
+    model_version: str | None = None
+    upstream_commit: str | None = None
+    warnings_json: str | None = None
+
+    @property
+    def warnings(self) -> list[dict[str, str]]:
+        return _decode_warnings(self.warnings_json)
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        payload = asdict(self)
+        payload.pop("warnings_json", None)
+        payload["warnings"] = self.warnings
+        return payload
 
 
 @dataclass(frozen=True)
@@ -112,7 +133,36 @@ class GenerationTakeRecord:
     error_summary: str
     created_at: str
     updated_at: str
+    model_id: str | None = None
+    model_version: str | None = None
+    upstream_commit: str | None = None
+    warnings_json: str | None = None
+
+    @property
+    def warnings(self) -> list[dict[str, str]]:
+        return _decode_warnings(self.warnings_json)
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        payload = asdict(self)
+        payload.pop("warnings_json", None)
+        payload["warnings"] = self.warnings
+        return payload
+
+
+def _decode_warnings(value: str | None) -> list[dict[str, str]]:
+    if not value:
+        return []
+    import json
+
+    try:
+        decoded = json.loads(value)
+    except (TypeError, ValueError):
+        return []
+    if not isinstance(decoded, list):
+        return []
+    return [
+        {"code": str(item["code"]), "message": str(item["message"])}
+        for item in decoded
+        if isinstance(item, dict) and "code" in item and "message" in item
+    ]
 

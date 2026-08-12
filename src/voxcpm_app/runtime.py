@@ -22,6 +22,14 @@ class RuntimeBackendStatus:
     started_at: str | None = None
     state: str = "configured"
     details: dict[str, object] | None = None
+    model_id: str | None = None
+    model_version: str | None = None
+    upstream_commit: str | None = None
+    supported_languages: list[str] | None = None
+    effective_precision: str | None = None
+    text_emotion_enabled: bool | None = None
+    warnings: list[dict[str, str]] | None = None
+    paths: dict[str, str] | None = None
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)

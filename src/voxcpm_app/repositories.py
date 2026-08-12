@@ -52,6 +52,10 @@ def _generation_from_row(row: sqlite3.Row) -> GenerationRecord:
         created_at=row["created_at"],
         updated_at=row["updated_at"],
         deleted_at=row["deleted_at"],
+        model_id=row["model_id"],
+        model_version=row["model_version"],
+        upstream_commit=row["upstream_commit"],
+        warnings_json=row["warnings_json"],
     )
 
 
@@ -84,6 +88,9 @@ def _job_from_row(row: sqlite3.Row) -> GenerationJobRecord:
         legacy_generation_id=row["legacy_generation_id"],
         created_at=row["created_at"],
         updated_at=row["updated_at"],
+        model_version=row["model_version"],
+        upstream_commit=row["upstream_commit"],
+        warnings_json=row["warnings_json"],
         deleted_at=row["deleted_at"],
     )
 
@@ -103,6 +110,10 @@ def _take_from_row(row: sqlite3.Row) -> GenerationTakeRecord:
         error_summary=row["error_summary"],
         created_at=row["created_at"],
         updated_at=row["updated_at"],
+        model_id=row["model_id"],
+        model_version=row["model_version"],
+        upstream_commit=row["upstream_commit"],
+        warnings_json=row["warnings_json"],
     )
 
 
@@ -246,8 +257,9 @@ class GenerationJobRepository:
             insert into generation_jobs (
                 id, backend_id, model_id, mode, status, input_text, voice_id,
                 params_json, output_asset_id, error_summary, legacy_generation_id,
-                created_at, updated_at, deleted_at
-            ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                created_at, updated_at, deleted_at, model_version, upstream_commit,
+                warnings_json
+            ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 record.id,
@@ -264,6 +276,9 @@ class GenerationJobRepository:
                 record.created_at,
                 record.updated_at,
                 record.deleted_at,
+                record.model_version,
+                record.upstream_commit,
+                record.warnings_json,
             ),
         )
         self.conn.commit()
@@ -289,7 +304,8 @@ class GenerationJobRepository:
             """
             update generation_jobs
             set status = ?, output_asset_id = ?, error_summary = ?,
-                legacy_generation_id = ?, updated_at = ?, deleted_at = ?
+                legacy_generation_id = ?, updated_at = ?, deleted_at = ?,
+                model_version = ?, upstream_commit = ?, warnings_json = ?
             where id = ?
             """,
             (
@@ -299,6 +315,9 @@ class GenerationJobRepository:
                 updated.legacy_generation_id,
                 updated.updated_at,
                 updated.deleted_at,
+                updated.model_version,
+                updated.upstream_commit,
+                updated.warnings_json,
                 job_id,
             ),
         )
@@ -315,7 +334,8 @@ class GenerationTakeRepository:
             insert into generation_takes (
                 id, job_id, backend_id, take_index, label, status, params_json,
                 output_asset_id, legacy_generation_id, is_selected, error_summary, created_at, updated_at
-            ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                , model_id, model_version, upstream_commit, warnings_json
+            ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 record.id,
@@ -331,6 +351,10 @@ class GenerationTakeRepository:
                 record.error_summary,
                 record.created_at,
                 record.updated_at,
+                record.model_id,
+                record.model_version,
+                record.upstream_commit,
+                record.warnings_json,
             ),
         )
         self.conn.commit()
@@ -356,7 +380,8 @@ class GenerationTakeRepository:
             """
             update generation_takes
             set label = ?, status = ?, output_asset_id = ?, is_selected = ?,
-                error_summary = ?, legacy_generation_id = ?, updated_at = ?
+                error_summary = ?, legacy_generation_id = ?, updated_at = ?,
+                model_id = ?, model_version = ?, upstream_commit = ?, warnings_json = ?
             where id = ?
             """,
             (
@@ -367,6 +392,10 @@ class GenerationTakeRepository:
                 updated.error_summary,
                 updated.legacy_generation_id,
                 updated.updated_at,
+                updated.model_id,
+                updated.model_version,
+                updated.upstream_commit,
+                updated.warnings_json,
                 take_id,
             ),
         )
@@ -398,8 +427,9 @@ class GenerationRepository:
                 prompt_text, cfg_value, inference_timesteps, normalize, denoise,
                 source_backend, source_mode, description, is_favorite, output_audio_path,
                 sample_rate, status, error_summary, saved_voice_id, promoted_to_voice_at,
-                hidden_from_history_at, created_at, updated_at, deleted_at
-            ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                hidden_from_history_at, created_at, updated_at, deleted_at,
+                model_id, model_version, upstream_commit, warnings_json
+            ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 record.id,
@@ -426,6 +456,10 @@ class GenerationRepository:
                 record.created_at,
                 record.updated_at,
                 record.deleted_at,
+                record.model_id,
+                record.model_version,
+                record.upstream_commit,
+                record.warnings_json,
             ),
         )
         self.conn.commit()
@@ -460,7 +494,8 @@ class GenerationRepository:
             set output_audio_path = ?, sample_rate = ?, status = ?, error_summary = ?,
                 source_backend = ?, source_mode = ?, description = ?, is_favorite = ?,
                 saved_voice_id = ?, promoted_to_voice_at = ?, hidden_from_history_at = ?,
-                updated_at = ?, deleted_at = ?
+                updated_at = ?, deleted_at = ?, model_id = ?, model_version = ?,
+                upstream_commit = ?, warnings_json = ?
             where id = ?
             """,
             (
@@ -477,6 +512,10 @@ class GenerationRepository:
                 updated.hidden_from_history_at,
                 updated.updated_at,
                 updated.deleted_at,
+                updated.model_id,
+                updated.model_version,
+                updated.upstream_commit,
+                updated.warnings_json,
                 generation_id,
             ),
         )
