@@ -9,6 +9,9 @@
 - [Phase 1/2 Runtime and UI Implementation Notes](technical/phase-1-2-runtime-ui-implementation.md)
 - [App Development Docs](app-dev/README.md)
 - [Dual-Model AppShell Execution Plan](Plan/11-dual-model-execution-plan.md)
+- [IndexTTS-2.5 Replacement And Performance Desk Plan](Plan/12-indextts25-migration-plan.md)
+- [IndexTTS-2.5 Upstream Contract Baseline](technical/indextts25-upstream-contract.md)
+- [IndexTTS-2.5 Implementation Status](technical/indextts25-implementation-status.md)
 - [Architecture Decision Records](decisions/)
 
 ## 最新重点

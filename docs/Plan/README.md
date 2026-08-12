@@ -14,3 +14,4 @@ the code and durable docs.
 Current plans:
 
 - [Dual-Model AppShell Execution Plan](11-dual-model-execution-plan.md)
+- [IndexTTS-2.5 Replacement And Performance Desk Plan](12-indextts25-migration-plan.md)

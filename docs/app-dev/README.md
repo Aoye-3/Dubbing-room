@@ -14,7 +14,7 @@ This documentation describes VoxCPM-Box application-layer development on top of 
 - A local app storage layer now exists under `src/voxcpm_app/` for Voice Library and Generation History metadata.
 - The Electron AppShell reads Voice Library and History records through IPC-backed app service calls.
 - Native save-voice actions, generation execution, and history recording now run through the AppShell backend.
-- IndexTTS2 now has an AppShell 表演台, Electron IPC bridge, synchronous and queued backend routes, multi-take fake-runner tests, and a `third_party/index-tts/` source snapshot. The project-local runtime and documented checkpoint inventory are present; real inference acceptance is still unrecorded.
+- IndexTTS-2.5 now has a pinned source manifest, versioned project-local runtime profile, Settings bridge, one-worker-per-job backend, structured job/take metadata, and a single-page multi-Take Performance Desk. Licensed 2.5 config/weights are not installed, so real inference acceptance remains explicitly open.
 - Additive storage v4, the FIFO job queue, take selection/History projection, History Trash/favorites, generation-to-voice promotion, and the safe update page are implemented.
 - VoxCPM-Box targets ordinary-user voiceover workflows while preserving upstream source behavior.
 - 双模型集成 PRD 定义通用存储后端、VoxCPM2 生产台和 IndexTTS2 表演台；当前基础闭环已实现，真实模型验收和发布硬化仍在后续阶段。
@@ -58,11 +58,13 @@ Out of scope for the first implementation:
 - [09 VoxCPM-Box Scope and Upstream Sync](09-voxcpm-box-scope-and-upstream-sync.md)
 - [10 双模型互补应用壳 PRD](10-dual-model-integration-prd.md)
 - [11 Dual-Model AppShell Execution Plan](../Plan/11-dual-model-execution-plan.md)
+- [12 IndexTTS-2.5 Replacement And Performance Desk Plan](../Plan/12-indextts25-migration-plan.md)
 - [完整双模型功能实现 PRD](../PRD/dual-model-audio-appshell-full-implementation-prd.md)
 - [Technical Documentation Index](../technical/README.md)
 - [ADR 0001: Local SQLite and File Storage](adr/0001-local-sqlite-and-file-storage.md)
 - [ADR 0002: 双模型 RuntimeCoordinator](adr/0002-dual-model-runtime-coordinator.md)
 - [ADR 0003: Hide promoted generation records from normal History](adr/0003-generation-history-voice-promotion.md)
+- [ADR 0004: Versioned IndexTTS-2.5 Runtime Adapter](adr/0004-indextts25-versioned-runtime-adapter.md)
 
 ## Default App Data Layout
 

@@ -9,6 +9,8 @@
 - [系统架构](architecture.md)
 - [Agent 协作与开发规则](agents.md)
 - [模型与运行时](models-runtime.md)
+- [IndexTTS-2.5 Upstream Contract Baseline](indextts25-upstream-contract.md)
+- [IndexTTS-2.5 Implementation Status](indextts25-implementation-status.md)
 - [前端架构](frontend.md)
 - [后端与 API](backend-api.md)
 - [存储与数据模型](storage-data.md)
