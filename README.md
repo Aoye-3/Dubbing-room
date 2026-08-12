@@ -219,5 +219,6 @@ data/runtimes/indextts2/
 - 当前公开仓库：[Aoye-3/Dubbing-room](https://github.com/Aoye-3/Dubbing-room)
 - 语音生成上游：[OpenBMB/VoxCPM](https://github.com/OpenBMB/VoxCPM)
 - 台词表演上游：[index-tts/index-tts](https://github.com/index-tts/index-tts)
+- IndexTTS-2.5：[上游许可与实验使用说明](docs/legal/indextts25-upstream-terms.md)
 
-项目代码遵循仓库中的 [LICENSE](LICENSE)。分发模型权重、源码快照或打包 runtime 前，还需要分别检查 VoxCPM 与 IndexTTS2 的上游许可证和模型使用条款；当前仓库不默认捆绑 IndexTTS2 权重。
+项目自行拥有权利的代码遵循仓库中的 [LICENSE](LICENSE)。第三方源码、模型及其衍生品继续适用各自的上游条款；当前仓库仅进行实验性质的开源开发，不默认捆绑 IndexTTS2 权重，也不宣称已取得商业授权。
