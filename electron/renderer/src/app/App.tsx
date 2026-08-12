@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { apiClient } from "../shared/api/client";
+import { backendErrorMessage } from "../shared/api/errors";
 import type { AppDataState, AppGeneration, AppVoice, LanguageCode, PageKey, ShellState, ShellStatus } from "../shared/types";
 import { AppShell } from "./AppShell";
 import { messages, type MessageKey } from "./i18n";
@@ -55,7 +56,7 @@ export function App() {
       setAppDataState("ready");
     } catch (error) {
       setAppDataState("failed");
-      setAppDataError(error instanceof Error ? error.message : String(error));
+      setAppDataError(backendErrorMessage(error));
     }
   }, []);
 

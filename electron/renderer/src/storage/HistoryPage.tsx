@@ -1,6 +1,7 @@
 import { AudioWaveform, Download, RotateCcw, Star, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { apiClient } from "../shared/api/client";
+import { backendErrorMessage } from "../shared/api/errors";
 import { mediaUrl } from "../shared/audio";
 import type { AppDataState, AppGeneration } from "../shared/types";
 import type { MessageKey } from "../app/i18n";
@@ -38,7 +39,7 @@ export function HistoryPage({
       const result = await apiClient.listGenerations({ deleted_only: true });
       setTrashedGenerations(result.items);
     } catch (error) {
-      setTrashError(error instanceof Error ? error.message : String(error));
+      setTrashError(backendErrorMessage(error));
     }
   };
 
@@ -193,10 +194,12 @@ export function HistoryPage({
           <div className="history-text">
             <strong>{row.description || row.control_instruction || row.prompt_text || t("noReference")}</strong>
             <p>{row.input_text}</p>
+            {row.source_mode === "indextts2-performance" && <p className="status-line">{indexTTSMetadata(row)}</p>}
+            {row.warnings?.map((warning) => <p className="status-line warning" key={`${warning.code}:${warning.message}`}>{warning.message}</p>)}
             {row.error_summary && <p className="status-line error">{row.error_summary}</p>}
           </div>
           <div className="history-output">
-            {row.output_audio_path && <audio controls src={mediaUrl(row.output_audio_path)} />}
+            {row.output_audio_path && <HistoryAudio path={row.output_audio_path} />}
             <span>{row.output_audio_path || t("noOutput")}</span>
           </div>
           <div className="history-actions">
@@ -223,6 +226,11 @@ export function HistoryPage({
       <div className="end-note">{t("endReached")}</div>
     </section>
   );
+}
+
+function HistoryAudio({ path }: { path: string }) {
+  const source = mediaUrl(path);
+  return source ? <audio controls src={source} /> : null;
 }
 
 function filterGenerations(
@@ -262,4 +270,22 @@ function sourceLabel(sourceMode: string, t: (key: MessageKey) => string): string
     return t("navIndexTTS2");
   }
   return sourceMode || "legacy";
+}
+
+function indexTTSMetadata(row: AppGeneration): string {
+  const params = readIndexTTSParams(row.control_instruction);
+  const model = row.model_id || "legacy/unknown model";
+  const version = row.model_version || "legacy/unknown version";
+  const language = typeof params.language === "string" ? params.language : "unknown language";
+  const duration = typeof params.duration_factor === "number" ? params.duration_factor : "unknown duration";
+  return `${model} · ${version} · ${language} · duration ${duration}`;
+}
+
+function readIndexTTSParams(controlInstruction: string): Record<string, unknown> {
+  try {
+    const decoded = JSON.parse(controlInstruction || "{}");
+    return decoded && typeof decoded === "object" && decoded.params && typeof decoded.params === "object" ? decoded.params : {};
+  } catch {
+    return {};
+  }
 }

@@ -1269,6 +1269,72 @@ h1 {
   gap: 16px;
 }
 
+.performance-desk {
+  min-width: 0;
+}
+
+.performance-job-summary,
+.performance-take header,
+.take-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.performance-takes {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.performance-take {
+  border: 1px solid var(--border, #34383d);
+  padding: 0.75rem;
+}
+
+.performance-take.selected {
+  border-color: var(--accent, #c3a96b);
+}
+
+.performance-take audio {
+  width: 100%;
+  margin: 0.75rem 0;
+}
+
+.performance-take pre {
+  max-height: 10rem;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+
+.annotation-helper {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.runtime-profile-form {
+  display: grid;
+  gap: 10px;
+}
+
+.runtime-profile-form > label:not(.checkbox-row) {
+  display: grid;
+  gap: 6px;
+  color: #77736a;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.runtime-profile-form select {
+  min-height: 38px;
+  padding: 0 10px;
+  color: #242522;
+  background: #f6f4ee;
+  border: 1px solid #ddd9cf;
+  border-radius: 6px;
+}
+
 .update-page {
   display: grid;
   grid-template-columns: minmax(320px, 0.8fr) minmax(0, 1fr);

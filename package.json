@@ -8,7 +8,8 @@
     "dev": "node electron/dev-runner.js",
     "renderer:dev": "vite --host 127.0.0.1",
     "build": "vite build",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@vitejs/plugin-react": "^5.1.2",
@@ -19,9 +20,15 @@
   },
   "devDependencies": {
     "@colbymchenry/codegraph": "^1.1.6",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.4",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "electron": "^39.2.7",
-    "typescript": "^5.9.3"
+    "jsdom": "^29.1.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.10"
   }
 }

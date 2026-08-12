@@ -3,11 +3,12 @@ import { useCallback, useEffect, useState } from "react";
 import { JobListPage } from "../jobs/JobListPage";
 import { IndexTTS2Page } from "../indextts2/IndexTTS2Page";
 import { apiClient } from "../shared/api/client";
+import { backendErrorMessage } from "../shared/api/errors";
 import { HistoryPage } from "../storage/HistoryPage";
 import { VoiceLibraryPage } from "../storage/VoiceLibraryPage";
 import { UpdatePage } from "../updates/UpdatePage";
 import { VoxCPMPage } from "../voxcpm/VoxCPMPage";
-import type { AppDataState, AppGeneration, AppVoice, FeatureMode, LanguageCode, PageKey, RuntimeBackendStatus, ShellState, ShellStatus } from "../shared/types";
+import type { AppDataState, AppGeneration, AppVoice, FeatureMode, IndexTTS2RuntimeProfile, IndexTTS2RuntimeProfileResponse, LanguageCode, PageKey, RuntimeBackendStatus, ShellState, ShellStatus } from "../shared/types";
 import type { MessageKey } from "./i18n";
 import { LanguageSwitch } from "./AppShell";
 
@@ -117,7 +118,7 @@ function ReservedFeaturePage({
   );
 }
 
-function SettingsPage({
+export function SettingsPage({
   status,
   shellState,
   language,
@@ -132,6 +133,9 @@ function SettingsPage({
 }) {
   const [runtimeBackends, setRuntimeBackends] = useState<RuntimeBackendStatus[]>([]);
   const [runtimeError, setRuntimeError] = useState("");
+  const [runtimeProfile, setRuntimeProfile] = useState<IndexTTS2RuntimeProfile | null>(null);
+  const [runtimeProfileMeta, setRuntimeProfileMeta] = useState<IndexTTS2RuntimeProfileResponse | null>(null);
+  const [runtimeProfileState, setRuntimeProfileState] = useState<"idle" | "saving" | "saved" | "failed">("idle");
 
   const loadRuntimeBackends = useCallback(async () => {
     setRuntimeError("");
@@ -140,15 +144,45 @@ function SettingsPage({
       setRuntimeBackends(result.items);
     } catch (error) {
       setRuntimeBackends([]);
-      setRuntimeError(error instanceof Error ? error.message : String(error));
+      setRuntimeError(backendErrorMessage(error));
+    }
+  }, []);
+
+  const loadRuntimeProfile = useCallback(async () => {
+    try {
+      const result = await apiClient.getIndexTTS2RuntimeProfile();
+      if (result) {
+        setRuntimeProfile(result.profile);
+        setRuntimeProfileMeta(result);
+      }
+    } catch (error) {
+      setRuntimeProfileState("failed");
+      setRuntimeError(backendErrorMessage(error));
     }
   }, []);
 
   useEffect(() => {
     if (status.state === "ready") {
       loadRuntimeBackends();
+      loadRuntimeProfile();
     }
-  }, [loadRuntimeBackends, status.state]);
+  }, [loadRuntimeBackends, loadRuntimeProfile, status.state]);
+
+  const saveRuntimeProfile = async () => {
+    if (!runtimeProfile) return;
+    setRuntimeProfileState("saving");
+    setRuntimeError("");
+    try {
+      const result = await apiClient.saveIndexTTS2RuntimeProfile(runtimeProfile);
+      if (!result) throw new Error("Runtime profile API unavailable.");
+      setRuntimeProfile(result.profile);
+      setRuntimeProfileMeta(result);
+      setRuntimeProfileState("saved");
+    } catch (error) {
+      setRuntimeProfileState("failed");
+      setRuntimeError(backendErrorMessage(error));
+    }
+  };
 
   return (
     <section className="settings-grid">
@@ -180,6 +214,34 @@ function SettingsPage({
         </div>
       </div>
       <div className="settings-panel">
+        <h2>IndexTTS-2.5 runtime</h2>
+        {runtimeProfile ? (
+          <div className="runtime-profile-form">
+            <label>
+              <span>Precision</span>
+              <select value={runtimeProfile.precision} onChange={(event) => setRuntimeProfile({ ...runtimeProfile, precision: event.target.value as IndexTTS2RuntimeProfile["precision"] })}>
+                <option value="auto">Auto</option>
+                <option value="bf16">BF16</option>
+                <option value="fp32">FP32</option>
+              </select>
+            </label>
+            <RuntimeProfileCheckbox label="Enable text emotion" field="allow_text_emotion" profile={runtimeProfile} setProfile={setRuntimeProfile} />
+            <RuntimeProfileCheckbox label="CUDA kernel" field="use_cuda_kernel" profile={runtimeProfile} setProfile={setRuntimeProfile} />
+            <RuntimeProfileCheckbox label="DeepSpeed" field="use_deepspeed" profile={runtimeProfile} setProfile={setRuntimeProfile} />
+            <RuntimeProfileCheckbox label="Acceleration" field="use_accel" profile={runtimeProfile} setProfile={setRuntimeProfile} />
+            <RuntimeProfileCheckbox label="Torch compile" field="use_torch_compile" profile={runtimeProfile} setProfile={setRuntimeProfile} />
+            <p className="status-line">Effective precision: {runtimeProfileMeta?.effective_precision ?? "--"}. Changes apply to the next worker.</p>
+            {runtimeProfileMeta?.warnings.map((warning) => <p key={warning} className="status-line error">{warning}</p>)}
+            <button className="primary-action" type="button" disabled={runtimeProfileState === "saving"} onClick={saveRuntimeProfile}>
+              {runtimeProfileState === "saving" ? "Saving…" : "Save runtime profile"}
+            </button>
+            {runtimeProfileState === "saved" && <p className="status-line success">Runtime profile saved for the next worker.</p>}
+          </div>
+        ) : runtimeProfileState === "failed"
+          ? <p className="status-line error">Runtime profile unavailable.</p>
+          : <p className="status-line">Loading runtime profile…</p>}
+      </div>
+      <div className="settings-panel">
         <h2>{t("interface")}</h2>
         <dl>
           <dt>{t("interfaceLanguage")}</dt>
@@ -207,6 +269,10 @@ function SettingsPage({
       </div>
     </section>
   );
+}
+
+function RuntimeProfileCheckbox({ label, field, profile, setProfile }: { label: string; field: Exclude<keyof IndexTTS2RuntimeProfile, "precision">; profile: IndexTTS2RuntimeProfile; setProfile: (profile: IndexTTS2RuntimeProfile) => void }) {
+  return <label className="checkbox-row"><input type="checkbox" checked={profile[field]} onChange={(event) => setProfile({ ...profile, [field]: event.target.checked })} /><span>{label}</span></label>;
 }
 
 function RuntimeBackendCard({ backend, t }: { backend: RuntimeBackendStatus; t: (key: MessageKey) => string }) {

@@ -8,6 +8,8 @@ import type {
   GenerationJob,
   GenerationTake,
   IndexTTS2Payload,
+  IndexTTS2RuntimeProfile,
+  IndexTTS2RuntimeProfileResponse,
   RuntimeBackendStatus,
   SelectedAudioFile,
   ShellState,
@@ -26,6 +28,8 @@ declare global {
       generateAudio(payload: GenerateAudioPayload): Promise<AppGeneration>;
       generateIndexTTS2(payload: IndexTTS2Payload): Promise<AppGeneration>;
       getRuntimeBackends(): Promise<AppListResponse<RuntimeBackendStatus>>;
+      getIndexTTS2RuntimeProfile(): Promise<IndexTTS2RuntimeProfileResponse>;
+      saveIndexTTS2RuntimeProfile(payload: IndexTTS2RuntimeProfile): Promise<IndexTTS2RuntimeProfileResponse>;
       createGenerationJob(payload: {
         backend_id: string;
         model_id: string;

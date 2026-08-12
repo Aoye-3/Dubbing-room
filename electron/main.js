@@ -270,7 +270,7 @@ function postAppBackendJson(route, payload = {}, timeoutMs = appBackendPostTimeo
             return;
           }
           if (response.statusCode < 200 || response.statusCode >= 300) {
-            reject(new Error(parsed.error || `Backend returned ${response.statusCode}`));
+            reject(createBackendRequestError(parsed, response.statusCode));
             return;
           }
           resolve(parsed);
@@ -297,7 +297,7 @@ function getAppBackendJson(route, timeoutMs = appBackendStatusTimeoutMs) {
         try {
           const parsed = data.trim() ? JSON.parse(data) : {};
           if (response.statusCode < 200 || response.statusCode >= 300) {
-            reject(new Error(parsed.error || `Backend returned ${response.statusCode}`));
+            reject(createBackendRequestError(parsed, response.statusCode));
             return;
           }
           resolve(parsed);
@@ -311,6 +311,32 @@ function getAppBackendJson(route, timeoutMs = appBackendStatusTimeoutMs) {
       request.destroy(new Error(`App backend request timed out after ${timeoutMs}ms: ${route}`));
     });
   });
+}
+
+function createBackendRequestError(payload, statusCode) {
+  const error = new Error(payload?.error || payload?.message || `Backend returned ${statusCode}`);
+  error.name = "BackendRequestError";
+  error.code = typeof payload?.code === "string" ? payload.code : `http_${statusCode}`;
+  error.type = typeof payload?.type === "string" ? payload.type : "BackendRequestError";
+  error.details = payload?.details && typeof payload.details === "object" ? payload.details : {};
+  return error;
+}
+
+async function backendIpcResult(promise) {
+  try {
+    return { ok: true, value: await promise };
+  } catch (value) {
+    const error = value instanceof Error ? value : new Error(String(value));
+    return {
+      ok: false,
+      error: {
+        message: error.message,
+        code: typeof error.code === "string" ? error.code : "backend_request_failed",
+        type: typeof error.type === "string" ? error.type : error.name,
+        details: error.details && typeof error.details === "object" ? error.details : {},
+      },
+    };
+  }
 }
 
 function runAppService(action, payload = {}) {
@@ -480,47 +506,55 @@ ipcMain.on("media-url", (event, projectRelativePath) => {
 ipcMain.handle("app-service", (_event, request) => {
   const action = request && typeof request.action === "string" ? request.action : "";
   const payload = request && typeof request.payload === "object" ? request.payload : {};
-  return runAppService(action, payload);
+  return backendIpcResult(runAppService(action, payload));
 });
 
 ipcMain.handle("generate-audio", (_event, payload) => {
-  return postAppBackendJson("/generate-audio", payload || {});
+  return backendIpcResult(postAppBackendJson("/generate-audio", payload || {}));
 });
 
 ipcMain.handle("generate-indextts2", (_event, payload) => {
-  return postAppBackendJson("/indextts2/generate", payload || {});
+  return backendIpcResult(postAppBackendJson("/indextts2/generate", payload || {}));
 });
 
 ipcMain.handle("get-runtime-backends", () => {
-  return getAppBackendJson("/runtime-backends");
+  return backendIpcResult(getAppBackendJson("/runtime-backends"));
+});
+
+ipcMain.handle("get-indextts2-runtime-profile", () => {
+  return backendIpcResult(getAppBackendJson("/runtime-backends/indextts2/config"));
+});
+
+ipcMain.handle("save-indextts2-runtime-profile", (_event, payload) => {
+  return backendIpcResult(postAppBackendJson("/runtime-backends/indextts2/config", payload || {}));
 });
 
 ipcMain.handle("create-generation-job", (_event, payload) => {
-  return postAppBackendJson("/generation-jobs", payload || {});
+  return backendIpcResult(postAppBackendJson("/generation-jobs", payload || {}));
 });
 
 ipcMain.handle("list-generation-jobs", () => {
-  return getAppBackendJson("/generation-jobs");
+  return backendIpcResult(getAppBackendJson("/generation-jobs"));
 });
 
 ipcMain.handle("get-generation-job", (_event, payload) => {
-  return getAppBackendJson(`/generation-jobs/${encodeURIComponent(payload.id)}`);
+  return backendIpcResult(getAppBackendJson(`/generation-jobs/${encodeURIComponent(payload.id)}`));
 });
 
 ipcMain.handle("cancel-generation-job", (_event, payload) => {
-  return postAppBackendJson(`/generation-jobs/${encodeURIComponent(payload.id)}/cancel`, {});
+  return backendIpcResult(postAppBackendJson(`/generation-jobs/${encodeURIComponent(payload.id)}/cancel`, {}));
 });
 
 ipcMain.handle("retry-generation-job", (_event, payload) => {
-  return postAppBackendJson(`/generation-jobs/${encodeURIComponent(payload.id)}/retry`, {});
+  return backendIpcResult(postAppBackendJson(`/generation-jobs/${encodeURIComponent(payload.id)}/retry`, {}));
 });
 
 ipcMain.handle("list-generation-takes", (_event, payload) => {
-  return getAppBackendJson(`/generation-jobs/${encodeURIComponent(payload.job_id)}/takes`);
+  return backendIpcResult(getAppBackendJson(`/generation-jobs/${encodeURIComponent(payload.job_id)}/takes`));
 });
 
 ipcMain.handle("select-generation-take", (_event, payload) => {
-  return postAppBackendJson(`/generation-takes/${encodeURIComponent(payload.id)}/select`, {});
+  return backendIpcResult(postAppBackendJson(`/generation-takes/${encodeURIComponent(payload.id)}/select`, {}));
 });
 
 function updateOptions(payload) {

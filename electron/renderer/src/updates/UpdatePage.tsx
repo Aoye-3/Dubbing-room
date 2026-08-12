@@ -1,6 +1,7 @@
 import { AlertTriangle, CheckCircle2, DownloadCloud, GitBranch, RefreshCw, ShieldCheck } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { apiClient } from "../shared/api/client";
+import { backendErrorMessage } from "../shared/api/errors";
 import type { ShellState, UpdateActionResult, UpdateStatus } from "../shared/types";
 import type { MessageKey } from "../app/i18n";
 
@@ -41,7 +42,7 @@ export function UpdatePage({ shellState, t }: UpdatePageProps) {
         setResult(nextResult);
         setStatus(nextResult.status);
       } catch (caught) {
-        setError(caught instanceof Error ? caught.message : String(caught));
+        setError(backendErrorMessage(caught));
       } finally {
         setBusy("");
       }
@@ -63,7 +64,7 @@ export function UpdatePage({ shellState, t }: UpdatePageProps) {
       })
       .catch((caught) => {
         if (mounted) {
-          setError(caught instanceof Error ? caught.message : String(caught));
+          setError(backendErrorMessage(caught));
         }
       });
     return () => {

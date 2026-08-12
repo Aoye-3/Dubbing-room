@@ -1,6 +1,7 @@
 import { CheckCircle2, RefreshCw, RotateCcw, Save, XCircle } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { apiClient } from "../shared/api/client";
+import { backendErrorMessage } from "../shared/api/errors";
 import { mediaUrl } from "../shared/audio";
 import type { GenerationJob, GenerationTake } from "../shared/types";
 
@@ -36,7 +37,7 @@ export function JobListPage({ labels }: { labels: Labels }) {
       );
       setTakesByJob(Object.fromEntries(takeEntries));
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : String(loadError));
+      setError(backendErrorMessage(loadError));
     }
   }, []);
 

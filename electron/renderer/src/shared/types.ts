@@ -77,6 +77,10 @@ export type AppGeneration = {
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
+  model_id?: string | null;
+  model_version?: string | null;
+  upstream_commit?: string | null;
+  warnings?: BackendWarning[];
 };
 
 export type AppListResponse<T> = {
@@ -123,6 +127,30 @@ export type RuntimeBackendStatus = {
   started_at?: string | null;
   state?: string;
   details?: Record<string, unknown> | null;
+  model_id?: string | null;
+  model_version?: string | null;
+  upstream_commit?: string | null;
+  supported_languages?: IndexTTS25Language[] | null;
+  effective_precision?: "bf16" | "fp32" | string | null;
+  text_emotion_enabled?: boolean | null;
+  warnings?: BackendWarning[] | null;
+  paths?: Record<string, string> | null;
+};
+
+export type IndexTTS2RuntimeProfile = {
+  precision: "auto" | "bf16" | "fp32";
+  allow_text_emotion: boolean;
+  use_cuda_kernel: boolean;
+  use_deepspeed: boolean;
+  use_accel: boolean;
+  use_torch_compile: boolean;
+};
+
+export type IndexTTS2RuntimeProfileResponse = {
+  profile: IndexTTS2RuntimeProfile;
+  effective_precision: "bf16" | "fp32";
+  warnings: string[];
+  capability: Record<string, unknown>;
 };
 
 export type GenerationJob = {
@@ -141,6 +169,9 @@ export type GenerationJob = {
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
+  model_version?: string | null;
+  upstream_commit?: string | null;
+  warnings?: BackendWarning[];
 };
 
 export type GenerationTake = {
@@ -165,17 +196,36 @@ export type GenerationTake = {
   error_summary: string;
   created_at: string;
   updated_at: string;
+  model_id?: string | null;
+  model_version?: string | null;
+  upstream_commit?: string | null;
+  warnings?: BackendWarning[];
 };
 
 export type IndexTTS2EmotionMode = "same_voice" | "audio_prompt" | "vector" | "text_prompt";
+export type IndexTTS25Language = "ZH" | "EN" | "JA" | "ES" | "AR";
+export type BackendWarning = { code: string; message: string };
 
-export type IndexTTS2Payload = {
+type IndexTTS25CommonPayload = {
   text: string;
+  language: IndexTTS25Language;
   speaker: { kind: "upload"; path: string } | { kind: "saved_voice"; voice_id: string };
-  emotion_mode: IndexTTS2EmotionMode;
-  emotion_audio?: { kind: "upload"; path: string };
   emo_alpha: number;
-  emo_vector?: {
+  duration_factor: number;
+  text_normalization: boolean;
+  interval_silence: number;
+  max_text_tokens_per_segment: number;
+  top_p: number;
+  top_k: number;
+  temperature: number;
+  length_penalty: number;
+  num_beams: number;
+  repetition_penalty: number;
+  max_mel_tokens: number;
+  take_count?: number;
+};
+
+export type IndexTTS25EmotionVector = {
     happy: number;
     angry: number;
     sad: number;
@@ -184,27 +234,18 @@ export type IndexTTS2Payload = {
     melancholic: number;
     surprised: number;
     calm: number;
-  };
-  use_emo_text?: boolean;
-  emo_text?: string;
-  use_random: boolean;
-  interval_silence: number;
-  max_text_tokens_per_segment: number;
-  do_sample: boolean;
-  top_p: number;
-  top_k: number;
-  temperature: number;
-  length_penalty: number;
-  num_beams: number;
-  repetition_penalty: number;
-  max_mel_tokens: number;
-  use_fp16: boolean;
-  use_cuda_kernel: boolean;
-  use_deepspeed: boolean;
-  use_accel: boolean;
-  use_torch_compile: boolean;
-  take_count?: number;
 };
+
+export type IndexTTS25EmotionPayload =
+  | { emotion_mode: "same_voice"; use_random: false; emotion_audio?: never; emo_vector?: never; emo_text?: never }
+  | { emotion_mode: "audio_prompt"; use_random: false; emotion_audio: { kind: "upload"; path: string }; emo_vector?: never; emo_text?: never }
+  | { emotion_mode: "vector"; use_random: boolean; emo_vector: IndexTTS25EmotionVector; emotion_audio?: never; emo_text?: never }
+  | { emotion_mode: "text_prompt"; use_random: false; emo_text: string; emotion_audio?: never; emo_vector?: never };
+
+export type IndexTTS25Payload = IndexTTS25CommonPayload & IndexTTS25EmotionPayload;
+
+/** @deprecated Use IndexTTS25Payload. */
+export type IndexTTS2Payload = IndexTTS25Payload;
 
 export type ProtectedPathCheck = {
   path: string;

@@ -6,6 +6,11 @@ const rendererPort = Number(process.env.VITE_RENDERER_PORT || 17888);
 export default defineConfig({
   root: "electron/renderer",
   plugins: [react()],
+  test: {
+    environment: "jsdom",
+    setupFiles: ["./src/test/setup.ts"],
+    clearMocks: true,
+  },
   build: {
     outDir: "../../dist/renderer",
     emptyOutDir: true,

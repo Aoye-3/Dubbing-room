@@ -1,6 +1,7 @@
 import { AudioWaveform, Download, MoreHorizontal, SlidersHorizontal, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { apiClient } from "../shared/api/client";
+import { backendErrorMessage } from "../shared/api/errors";
 import { mediaUrl } from "../shared/audio";
 import type { AppDataState, AppVoice, SelectedAudioFile } from "../shared/types";
 import type { MessageKey } from "../app/i18n";
@@ -55,7 +56,7 @@ export function VoiceLibraryPage({
       setNotes("");
       await reload();
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : String(saveError));
+      setError(backendErrorMessage(saveError));
     } finally {
       setIsSaving(false);
     }

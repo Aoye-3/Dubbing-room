@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { MessageKey } from "../app/i18n";
 import { apiClient } from "./api/client";
+import { backendErrorMessage } from "./api/errors";
 import type { AppGeneration } from "./types";
 
 export function useGenerationAudioExport(record: AppGeneration | null, t: (key: MessageKey) => string) {
@@ -28,7 +29,7 @@ export function useGenerationAudioExport(record: AppGeneration | null, t: (key: 
         setExportMessage(t("exportSuccess"));
       }
     } catch (exportFailure) {
-      setExportError(exportFailure instanceof Error ? exportFailure.message : String(exportFailure));
+      setExportError(backendErrorMessage(exportFailure));
     }
   }, [audioPath, record?.id, t]);
 

@@ -6,6 +6,8 @@ import type {
   GenerationJob,
   GenerationTake,
   IndexTTS2Payload,
+  IndexTTS2RuntimeProfile,
+  IndexTTS2RuntimeProfileResponse,
   RuntimeBackendStatus,
   SelectedAudioFile,
   ShellState,
@@ -60,6 +62,14 @@ export const apiClient = {
 
   getRuntimeBackends(): Promise<AppListResponse<RuntimeBackendStatus>> {
     return shell()?.getRuntimeBackends() ?? Promise.resolve(emptyList<RuntimeBackendStatus>());
+  },
+
+  getIndexTTS2RuntimeProfile(): Promise<IndexTTS2RuntimeProfileResponse | undefined> {
+    return shell()?.getIndexTTS2RuntimeProfile() ?? Promise.resolve(undefined);
+  },
+
+  saveIndexTTS2RuntimeProfile(payload: IndexTTS2RuntimeProfile): Promise<IndexTTS2RuntimeProfileResponse | undefined> {
+    return shell()?.saveIndexTTS2RuntimeProfile(payload) ?? Promise.resolve(undefined);
   },
 
   createGenerationJob(payload: {

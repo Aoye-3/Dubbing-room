@@ -1,6 +1,7 @@
 import { HelpCircle, Library, RefreshCw, Save, SlidersHorizontal, Sparkles, Upload } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { apiClient } from "../shared/api/client";
+import { backendErrorMessage } from "../shared/api/errors";
 import { GenerationResultPanel } from "../shared/GenerationResultPanel";
 import { LoadingPanel } from "../shared/components";
 import { useGenerationAudioExport } from "../shared/useGenerationAudioExport";
@@ -96,7 +97,7 @@ export function VoxCPMPage({
         loaded: false,
         busy: false,
         device: "unknown",
-        last_error: runtimeError instanceof Error ? runtimeError.message : String(runtimeError),
+        last_error: backendErrorMessage(runtimeError),
         capabilities: [],
       });
     }
@@ -146,7 +147,7 @@ export function VoxCPMPage({
       setMessage(t("saveSuccess"));
       await reload();
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : String(saveError));
+      setError(backendErrorMessage(saveError));
     } finally {
       setIsSaving(false);
     }
@@ -194,7 +195,7 @@ export function VoxCPMPage({
       await reload();
       await loadRuntime();
     } catch (generateError) {
-      setError(generateError instanceof Error ? generateError.message : String(generateError));
+      setError(backendErrorMessage(generateError));
     } finally {
       setIsGenerating(false);
     }
@@ -218,7 +219,7 @@ export function VoxCPMPage({
       setMessage(t("saveSuccess"));
       await reload();
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : String(saveError));
+      setError(backendErrorMessage(saveError));
     } finally {
       setIsSaving(false);
     }
